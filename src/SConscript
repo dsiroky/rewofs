@@ -1,0 +1,6 @@
+Import("env")
+
+src_env = env.Clone()
+Export("src_env")
+
+SConscript(dirs=["rewofs"])

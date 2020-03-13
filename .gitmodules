@@ -1,0 +1,12 @@
+[submodule "thirdparty/flatbuffers"]
+	path = thirdparty/flatbuffers
+	url = https://github.com/google/flatbuffers.git
+[submodule "thirdparty/googletest"]
+	path = thirdparty/googletest
+	url = https://github.com/google/googletest
+[submodule "thirdparty/GSL"]
+	path = thirdparty/GSL
+	url = https://github.com/microsoft/GSL
+[submodule "thirdparty/strong_type"]
+	path = thirdparty/strong_type
+	url = https://github.com/rollbear/strong_type

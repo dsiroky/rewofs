@@ -1,0 +1,39 @@
+Import("env")
+lib_env = env
+
+#==========================================================================
+
+def setup_env(env):
+    env = env.Clone()
+    # disable warnings
+    env.AppendUnique(CCFLAGS=["-w"])
+    return env
+
+#--------------------------------------------------------------------------
+
+def lib_gen(env, libname, src, includedir):
+    env.AppendUnique(CPPPATH=Dir(includedir))
+    env = setup_env(env)
+    if len(src) > 0:
+        lib = env.StaticLibrary(libname, source=src)
+        Export({libname: lib})
+    return env
+
+#--------------------------------------------------------------------------
+
+def gtest_lib(env):
+    lib_gen(env, "gtest",
+            [
+                File("googletest/googletest/src/gtest-all.cc"),
+                File("googletest/googlemock/src/gmock-all.cc"),
+            ],
+            [
+                Dir("googletest/googletest"),
+                Dir("googletest/googletest/include"),
+                Dir("googletest/googlemock"),
+                Dir("googletest/googlemock/include"),
+            ])
+
+#==========================================================================
+
+gtest_lib(lib_env)

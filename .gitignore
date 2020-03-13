@@ -1,0 +1,5 @@
+/.build_cache
+/build
+*.py[co]
+.sconsign*
+__pycache__

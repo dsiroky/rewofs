@@ -1,0 +1,31 @@
+include "messages.fbs";
+
+namespace rewofs.messages;
+
+//--------------------------------------------------------------------------
+
+union Message
+{
+    CommandStat,
+    ResultStat,
+    CommandReaddir,
+    ResultReaddir,
+    CommandReadlink,
+    ResultReadlink,
+    CommandMkdir,
+    ResultMkdir,
+
+    CommandOpen,
+    CommandClose,
+    ResultGeneric,
+    ResultRead
+}
+
+// Main transport frame.
+table Frame
+{
+    id:uint64;
+    message: Message;
+}
+
+root_type Frame;

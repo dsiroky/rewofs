@@ -1,0 +1,10 @@
+Import("test_env", "gtest", "rewofs_lib")
+
+unittests_env = test_env.Clone()
+
+OUT = "run"
+SRC = Glob("*.cpp")
+
+unittests_env.Append(LIBS=[gtest, rewofs_lib])
+
+prog = unittests_env.Program(OUT, SRC)

@@ -1,0 +1,34 @@
+Import("src_env")
+rewofs_env = src_env.Clone()
+
+MAIN = "main.cpp"
+SRC = Glob("*.cpp", exclude=MAIN) + Glob("client/*.cpp") + Glob("server/*.cpp")
+
+rewofs_env.Flatc(
+        Glob("messages/*.fbs"),
+        FLATC_OUTDIR=Dir("messages").abspath,
+        FLATC_FLAGS=[
+            "--cpp",
+            "--scoped-enums",
+            "--gen-mutable",
+            #"--gen-object-api",
+            #"--gen-name-strings",
+            # "--reflect-types",
+            # "--reflect-names",
+            ],
+        FLATC_INCPATH=["#src"],
+        )
+
+OUT = "rewofs"
+
+rewofs_lib = [
+        src_env.WholeArchive(rewofs_env.StaticLibrary(OUT, SRC)),
+        "fuse", "zstd", "nanomsg", "fmt",
+        "boost_program_options", "boost_filesystem", "boost_system",
+    ]
+
+rewofs_env.AppendUnique(LIBS=[rewofs_lib])
+
+rewofs_prog = rewofs_env.Program(OUT, [MAIN])[0]
+
+Export("rewofs_lib", "rewofs_prog")

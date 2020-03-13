@@ -1,0 +1,90 @@
+namespace rewofs.messages;
+
+//==========================================================================
+
+struct Time
+{
+    nsec:int64;
+    sec:int64;
+}
+
+struct Stat
+{
+    st_mode:uint32;
+    st_nlink:uint64;
+    st_size:int64;
+    st_atim:Time;
+    st_ctim:Time;
+    st_mtim:Time;
+}
+
+table DirectoryItem
+{
+    path:string;
+    st:Stat;
+}
+
+//==========================================================================
+
+table CommandStat
+{
+    path:string;
+}
+table ResultStat
+{
+    res_errno:int32;
+    st:Stat;
+}
+
+table CommandReaddir
+{
+    path:string;
+}
+table ResultReaddir
+{
+    res_errno:int32;
+    items:[DirectoryItem];
+}
+
+table CommandReadlink
+{
+    path:string;
+}
+table ResultReadlink
+{
+    res_errno:int32;
+    path:string;
+}
+
+table CommandMkdir
+{
+    path:string;
+    mode:uint32;
+}
+table ResultMkdir
+{
+    res_errno:int32;
+}
+
+table CommandOpen
+{
+  path:string;
+  flags:int32;
+  mode:uint32;
+}
+
+table CommandClose
+{
+  path:string;
+}
+
+table ResultGeneric
+{
+    res:int32;
+}
+
+table ResultRead
+{
+    res:int32;
+    data:[ubyte];
+}

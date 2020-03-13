@@ -1,0 +1,186 @@
+/// @copydoc fuse.hpp
+///
+/// @file
+
+#include <stdexcept>
+
+#define FUSE_USE_VERSION 26
+#include <fuse.h>
+
+#include <stdio.h>
+#include <string.h>
+#include <errno.h>
+#include <fcntl.h>
+
+#include "rewofs/log.hpp"
+#include "rewofs/transport.hpp"
+#include "rewofs/client/fuse.hpp"
+
+//==========================================================================
+namespace rewofs::client {
+//==========================================================================
+
+namespace fs = boost::filesystem;
+
+//==========================================================================
+
+static struct fuse_operations g_oper{};
+static IVfs* g_vfs{};
+
+//==========================================================================
+
+int gen_return_error_code()
+{
+    try
+    {
+        throw;
+    }
+    catch (const std::system_error& err)
+    {
+        assert(err.code().value() > 0);
+        return -err.code().value();
+    }
+    log_error("eio");
+    return -EIO;
+}
+
+//==========================================================================
+
+static const char *str = "Hello World!\n";
+static const char *path = "/hello";
+
+static int getattr(const char *path, struct stat *stbuf) noexcept
+{
+    log_trace("path:{}", path);
+    try
+    {
+        g_vfs->getattr(path, *stbuf);
+    }
+    catch (...)
+    {
+        return gen_return_error_code();
+    }
+    return 0;
+}
+
+static int readdir(const char *path, void *buf, fuse_fill_dir_t filler,
+			 off_t, struct fuse_file_info *) noexcept
+{
+    log_trace("path:{}", path);
+    try
+    {
+        g_vfs->readdir(path, [buf, filler](const fs::path& path, const struct stat& st) {
+            log_trace("{}", path.c_str());
+            //filler(buf, path.c_str(), &st, 0);
+            filler(buf, path.c_str(), nullptr, 0);
+        });
+    }
+    catch (...)
+    {
+        return gen_return_error_code();
+    }
+    return 0;
+}
+
+static int readlink(const char* path, char* dst, size_t sz) noexcept
+{
+    log_trace("path:{}", path);
+    try
+    {
+        const auto link_path = g_vfs->readlink(path);
+        const auto len = std::min(sz, link_path.size());
+        std::copy(link_path.c_str(), link_path.c_str() + len, dst);
+        dst[len] = '\0';
+    }
+    catch (...)
+    {
+        return gen_return_error_code();
+    }
+    return 0;
+}
+
+static int mkdir(const char* path, mode_t mode) noexcept
+{
+    log_trace("path:{}", path);
+    try
+    {
+        g_vfs->mkdir(path, mode | S_IFDIR);
+    }
+    catch (...)
+    {
+        return gen_return_error_code();
+    }
+    return 0;
+}
+
+//==========================================================================
+
+Fuse::Fuse(IVfs& vfs)
+    : m_vfs{vfs}
+{
+    g_vfs = &m_vfs;
+
+    g_oper.getattr = getattr;
+    g_oper.readdir = readdir;
+    g_oper.readlink = readlink;
+    g_oper.mkdir = mkdir;
+}
+
+//--------------------------------------------------------------------------
+
+void Fuse::set_mountpoint(const std::string& path)
+{
+    log_info("mountpoint: {}", m_mountpoint);
+    m_mountpoint = path;
+}
+
+//--------------------------------------------------------------------------
+
+void Fuse::start()
+{
+    m_thread = std::thread(&Fuse::run, this);
+}
+
+//--------------------------------------------------------------------------
+
+void Fuse::wait()
+{
+    if (m_thread.joinable())
+    {
+        m_thread.join();
+    }
+}
+
+//--------------------------------------------------------------------------
+
+void Fuse::run()
+{
+    log_info("starting FUSE");
+
+    int res{};
+
+    auto ch = fuse_mount(m_mountpoint.c_str(), nullptr);
+    auto fuse = fuse_new(ch, nullptr, &g_oper, sizeof(g_oper), nullptr);
+    if (fuse == nullptr)
+    {
+        throw std::runtime_error{"can't mount"};
+    }
+
+    res = fuse_set_signal_handlers(fuse_get_session(fuse));
+    if (res == -1)
+    {
+        throw std::runtime_error{"can't set signal handlers"};
+    }
+
+    res = fuse_loop_mt(fuse);
+    log_info("quitting");
+    if (res == -1)
+    {
+        throw std::runtime_error{"can't set signal handlers"};
+    }
+
+    fuse_unmount("/tmp/m", ch);
+}
+
+//==========================================================================
+} // namespace rewofs::client
