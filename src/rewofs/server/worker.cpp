@@ -50,6 +50,11 @@ Worker::Worker(server::Transport& transport)
     SUB(CommandReaddir, process_readdir);
     SUB(CommandReadlink, process_readlink);
     SUB(CommandMkdir, process_mkdir);
+    SUB(CommandRmdir, process_rmdir);
+    SUB(CommandUnlink, process_unlink);
+    SUB(CommandSymlink, process_symlink);
+    SUB(CommandRename, process_rename);
+    SUB(CommandChmod, process_chmod);
 }
 
 //--------------------------------------------------------------------------
@@ -198,7 +203,7 @@ flatbuffers::Offset<messages::ResultReadlink>
 
 //--------------------------------------------------------------------------
 
-flatbuffers::Offset<messages::ResultMkdir>
+flatbuffers::Offset<messages::ResultErrno>
     Worker::process_mkdir(flatbuffers::FlatBufferBuilder& fbb,
                           const messages::CommandMkdir& msg)
 {
@@ -209,10 +214,106 @@ flatbuffers::Offset<messages::ResultMkdir>
 
     if (res < 0)
     {
-        return messages::CreateResultMkdir(fbb, errno);
+        return messages::CreateResultErrno(fbb, errno);
     }
 
-    return messages::CreateResultMkdir(fbb, 0);
+    return messages::CreateResultErrno(fbb, 0);
+}
+
+//--------------------------------------------------------------------------
+
+flatbuffers::Offset<messages::ResultErrno>
+    Worker::process_rmdir(flatbuffers::FlatBufferBuilder& fbb,
+                          const messages::CommandRmdir& msg)
+{
+    const auto path = map_path(msg.path()->c_str());
+
+    const auto res = rmdir(path.c_str());
+    log_trace("{} res:{}", path.native(), res);
+
+    if (res < 0)
+    {
+        return messages::CreateResultErrno(fbb, errno);
+    }
+
+    return messages::CreateResultErrno(fbb, 0);
+}
+
+//--------------------------------------------------------------------------
+
+flatbuffers::Offset<messages::ResultErrno>
+    Worker::process_unlink(flatbuffers::FlatBufferBuilder& fbb,
+                          const messages::CommandUnlink& msg)
+{
+    const auto path = map_path(msg.path()->c_str());
+
+    const auto res = unlink(path.c_str());
+    log_trace("{} res:{}", path.native(), res);
+
+    if (res < 0)
+    {
+        return messages::CreateResultErrno(fbb, errno);
+    }
+
+    return messages::CreateResultErrno(fbb, 0);
+}
+
+//--------------------------------------------------------------------------
+
+flatbuffers::Offset<messages::ResultErrno>
+    Worker::process_symlink(flatbuffers::FlatBufferBuilder& fbb,
+                          const messages::CommandSymlink& msg)
+{
+    const auto link_path = map_path(msg.link_path()->c_str());
+
+    const auto res = symlink(msg.target()->c_str(), link_path.c_str());
+    log_trace("{}->{} res:{}", link_path.native(), msg.target()->c_str(), res);
+
+    if (res < 0)
+    {
+        return messages::CreateResultErrno(fbb, errno);
+    }
+
+    return messages::CreateResultErrno(fbb, 0);
+}
+
+//--------------------------------------------------------------------------
+
+flatbuffers::Offset<messages::ResultErrno>
+    Worker::process_rename(flatbuffers::FlatBufferBuilder& fbb,
+                           const messages::CommandRename& msg)
+{
+    const auto old_path = map_path(msg.old_path()->c_str());
+    const auto new_path = map_path(msg.new_path()->c_str());
+
+    const auto res = rename(old_path.c_str(), new_path.c_str());
+    log_trace("{}->{} res:{}", old_path.native(), new_path.native(), res);
+
+    if (res < 0)
+    {
+        return messages::CreateResultErrno(fbb, errno);
+    }
+
+    return messages::CreateResultErrno(fbb, 0);
+}
+
+//--------------------------------------------------------------------------
+
+flatbuffers::Offset<messages::ResultErrno>
+    Worker::process_chmod(flatbuffers::FlatBufferBuilder& fbb,
+                          const messages::CommandChmod& msg)
+{
+    const auto path = map_path(msg.path()->c_str());
+
+    const auto res = chmod(path.c_str(), msg.mode());
+    log_trace("{} res:{}", path.native(), res);
+
+    if (res < 0)
+    {
+        return messages::CreateResultErrno(fbb, errno);
+    }
+
+    return messages::CreateResultErrno(fbb, 0);
 }
 
 //==========================================================================

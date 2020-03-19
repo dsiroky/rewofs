@@ -44,9 +44,24 @@ private:
     flatbuffers::Offset<messages::ResultReadlink>
         process_readlink(flatbuffers::FlatBufferBuilder& fbb,
                         const messages::CommandReadlink& msg);
-    flatbuffers::Offset<messages::ResultMkdir>
+    flatbuffers::Offset<messages::ResultErrno>
         process_mkdir(flatbuffers::FlatBufferBuilder& fbb,
                         const messages::CommandMkdir& msg);
+    flatbuffers::Offset<messages::ResultErrno>
+        process_rmdir(flatbuffers::FlatBufferBuilder& fbb,
+                        const messages::CommandRmdir& msg);
+    flatbuffers::Offset<messages::ResultErrno>
+        process_unlink(flatbuffers::FlatBufferBuilder& fbb,
+                        const messages::CommandUnlink& msg);
+    flatbuffers::Offset<messages::ResultErrno>
+        process_symlink(flatbuffers::FlatBufferBuilder& fbb,
+                        const messages::CommandSymlink& msg);
+    flatbuffers::Offset<messages::ResultErrno>
+        process_rename(flatbuffers::FlatBufferBuilder& fbb,
+                        const messages::CommandRename& msg);
+    flatbuffers::Offset<messages::ResultErrno>
+        process_chmod(flatbuffers::FlatBufferBuilder& fbb,
+                        const messages::CommandChmod& msg);
 
     Transport& m_transport;
     std::thread m_thread{};

@@ -31,6 +31,12 @@ public:
         = 0;
     virtual std::string readlink(const Path& path) = 0;
     virtual void mkdir(const Path& path, mode_t mode) = 0;
+    virtual void rmdir(const Path& path) = 0;
+    virtual void unlink(const Path& path) = 0;
+    virtual void symlink(const Path& target, const Path& link_path) = 0;
+    virtual void rename(const Path& old_path, const Path& new_path)
+        = 0;
+    virtual void chmod(const Path& path, const mode_t mode) = 0;
 
 private:
 };
@@ -46,6 +52,11 @@ public:
     void readdir(const Path&, const DirFiller& filler) override;
     std::string readlink(const Path& path) override;
     void mkdir(const Path& path, mode_t mode) override;
+    void rmdir(const Path& path) override;
+    void unlink(const Path& path) override;
+    void symlink(const Path& target, const Path& link_path) override;
+    void rename(const Path& old_path, const Path& new_path) override;
+    void chmod(const Path& path, const mode_t mode) override;
 
     //--------------------------------
 private:

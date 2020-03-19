@@ -61,9 +61,33 @@ table CommandMkdir
     path:string;
     mode:uint32;
 }
-table ResultMkdir
+
+table CommandRmdir
 {
-    res_errno:int32;
+    path:string;
+}
+
+table CommandUnlink
+{
+    path:string;
+}
+
+table CommandSymlink
+{
+    link_path:string;
+    target:string;
+}
+
+table CommandRename
+{
+    old_path:string;
+    new_path:string;
+}
+
+table CommandChmod
+{
+    path:string;
+    mode:uint32;
 }
 
 table CommandOpen
@@ -78,9 +102,9 @@ table CommandClose
   path:string;
 }
 
-table ResultGeneric
+table ResultErrno
 {
-    res:int32;
+    res_errno:int32;
 }
 
 table ResultRead

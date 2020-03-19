@@ -13,11 +13,15 @@ union Message
     CommandReadlink,
     ResultReadlink,
     CommandMkdir,
-    ResultMkdir,
+    CommandRmdir,
+    CommandUnlink,
+    CommandSymlink,
+    CommandRename,
+    CommandChmod,
 
     CommandOpen,
     CommandClose,
-    ResultGeneric,
+    ResultErrno,
     ResultRead
 }
 

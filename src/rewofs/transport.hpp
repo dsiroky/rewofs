@@ -44,11 +44,6 @@ flatbuffers::Offset<messages::CommandOpen>
                       const int flags);
 flatbuffers::Offset<messages::CommandClose>
     make_command_close(flatbuffers::FlatBufferBuilder& fbb, const std::string& path);
-flatbuffers::Offset<messages::ResultGeneric>
-    make_result_generic(flatbuffers::FlatBufferBuilder& fbb, const int32_t status);
-flatbuffers::Offset<messages::ResultRead>
-    make_result_read(flatbuffers::FlatBufferBuilder& fbb, const int32_t status,
-                     const gsl::span<const uint8_t> data);
 
 template<typename _Msg>
 flatbuffers::Offset<messages::Frame> make_frame(flatbuffers::FlatBufferBuilder& fbb,

@@ -107,7 +107,84 @@ void RemoteVfs::mkdir(const Path& path, mode_t mode)
 {
     flatbuffers::FlatBufferBuilder fbb{};
     const auto command = messages::CreateCommandMkdirDirect(fbb, path.c_str(), mode);
-    const auto res = single_command<messages::ResultMkdir>(fbb, command);
+    const auto res = single_command<messages::ResultErrno>(fbb, command);
+
+    const auto& message = res.message();
+    if (message.res_errno() != 0)
+    {
+        throw std::system_error{message.res_errno(), std::generic_category()};
+    }
+}
+
+//--------------------------------------------------------------------------
+
+void RemoteVfs::rmdir(const Path& path)
+{
+    flatbuffers::FlatBufferBuilder fbb{};
+    const auto command = messages::CreateCommandRmdirDirect(fbb, path.c_str());
+    const auto res = single_command<messages::ResultErrno>(fbb, command);
+
+    const auto& message = res.message();
+    if (message.res_errno() != 0)
+    {
+        throw std::system_error{message.res_errno(), std::generic_category()};
+    }
+}
+
+//--------------------------------------------------------------------------
+
+void RemoteVfs::unlink(const Path& path)
+{
+    flatbuffers::FlatBufferBuilder fbb{};
+    const auto command = messages::CreateCommandUnlinkDirect(fbb, path.c_str());
+    const auto res = single_command<messages::ResultErrno>(fbb, command);
+
+    const auto& message = res.message();
+    if (message.res_errno() != 0)
+    {
+        throw std::system_error{message.res_errno(), std::generic_category()};
+    }
+}
+
+//--------------------------------------------------------------------------
+
+void RemoteVfs::symlink(const Path& target, const Path& link_path)
+{
+    flatbuffers::FlatBufferBuilder fbb{};
+    const auto command
+        = messages::CreateCommandSymlinkDirect(fbb, link_path.c_str(), target.c_str());
+    const auto res = single_command<messages::ResultErrno>(fbb, command);
+
+    const auto& message = res.message();
+    if (message.res_errno() != 0)
+    {
+        throw std::system_error{message.res_errno(), std::generic_category()};
+    }
+}
+
+//--------------------------------------------------------------------------
+
+void RemoteVfs::rename(const Path& old_path, const Path& new_path)
+{
+    flatbuffers::FlatBufferBuilder fbb{};
+    const auto command = messages::CreateCommandRenameDirect(fbb, old_path.c_str(),
+                                                             new_path.c_str());
+    const auto res = single_command<messages::ResultErrno>(fbb, command);
+
+    const auto& message = res.message();
+    if (message.res_errno() != 0)
+    {
+        throw std::system_error{message.res_errno(), std::generic_category()};
+    }
+}
+
+//--------------------------------------------------------------------------
+
+void RemoteVfs::chmod(const Path& path, const mode_t mode)
+{
+    flatbuffers::FlatBufferBuilder fbb{};
+    const auto command = messages::CreateCommandChmodDirect(fbb, path.c_str(), mode);
+    const auto res = single_command<messages::ResultErrno>(fbb, command);
 
     const auto& message = res.message();
     if (message.res_errno() != 0)

@@ -53,24 +53,6 @@ flatbuffers::Offset<messages::CommandClose>
     return messages::CreateCommandClose(fbb, fn);
 }
 
-//--------------------------------------------------------------------------
-
-flatbuffers::Offset<messages::ResultGeneric>
-    make_result_generic(flatbuffers::FlatBufferBuilder& fbb, const int32_t status)
-{
-    return messages::CreateResultGeneric(fbb, status);
-}
-
-//--------------------------------------------------------------------------
-
-flatbuffers::Offset<messages::ResultRead>
-    make_result_read(flatbuffers::FlatBufferBuilder& fbb, const int32_t status,
-                     const gsl::span<const uint8_t> data)
-{
-    const auto vdata = fbb.CreateVector(data.data(), data.size());
-    return messages::CreateResultRead(fbb, status, vdata);
-}
-
 //==========================================================================
 
 Serializer::Serializer(const uint64_t msgid_seed)

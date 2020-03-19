@@ -300,7 +300,7 @@ TEST(Deserializer, ProcessUnwantedMessageWithSameId_NotConsumed)
     Deserializer deserializer{};
 
     flatbuffers::FlatBufferBuilder fbb{};
-    const auto cmd = make_result_generic(fbb, 333);
+    const auto cmd = messages::CreateResultErrno(fbb, 333);
     const auto frame = make_frame(fbb, 4, cmd);
     fbb.Finish(frame);
 
@@ -318,14 +318,14 @@ TEST(Deserializer, ProcessWantedMessageWithDifferentId_NotConsume)
     Deserializer deserializer{};
 
     flatbuffers::FlatBufferBuilder fbb{};
-    const auto cmd = make_result_generic(fbb, 333);
+    const auto cmd = messages::CreateResultErrno(fbb, 333);
     const auto frame = make_frame(fbb, 4, cmd);
     fbb.Finish(frame);
 
     deserializer.process_frame(
         {fbb.GetBufferPointer(), fbb.GetBufferPointer() + fbb.GetSize()});
 
-    EXPECT_FALSE(deserializer.wait_for_result<rmsg::ResultGeneric>(
+    EXPECT_FALSE(deserializer.wait_for_result<rmsg::ResultErrno>(
         MessageId{5}, std::chrono::milliseconds{1}).is_valid());
 }
 
@@ -336,7 +336,7 @@ TEST(Deserializer, ProcessWantedMessage_ConsumeAfterProcess)
     Deserializer deserializer{};
 
     flatbuffers::FlatBufferBuilder fbb{};
-    const auto cmd = make_result_generic(fbb, 333);
+    const auto cmd = messages::CreateResultErrno(fbb, 333);
     const auto frame = make_frame(fbb, 4, cmd);
     fbb.Finish(frame);
 
@@ -344,13 +344,13 @@ TEST(Deserializer, ProcessWantedMessage_ConsumeAfterProcess)
         {fbb.GetBufferPointer(), fbb.GetBufferPointer() + fbb.GetSize()});
 
     {
-        const auto result = deserializer.wait_for_result<rmsg::ResultGeneric>(
+        const auto result = deserializer.wait_for_result<rmsg::ResultErrno>(
             MessageId{4}, std::chrono::milliseconds{1});
         EXPECT_TRUE(result.is_valid());
-        EXPECT_EQ(result.message().res(), 333);
+        EXPECT_EQ(result.message().res_errno(), 333);
     }
     { // consumed
-        EXPECT_FALSE(deserializer.wait_for_result<rmsg::ResultGeneric>(
+        EXPECT_FALSE(deserializer.wait_for_result<rmsg::ResultErrno>(
             MessageId{4}, std::chrono::milliseconds{1}).is_valid());
     }
 }

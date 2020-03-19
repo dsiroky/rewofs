@@ -113,6 +113,76 @@ static int mkdir(const char* path, mode_t mode) noexcept
     return 0;
 }
 
+static int rmdir(const char* path) noexcept
+{
+    log_trace("path:{}", path);
+    try
+    {
+        g_vfs->rmdir(path);
+    }
+    catch (...)
+    {
+        return gen_return_error_code();
+    }
+    return 0;
+}
+
+static int unlink(const char* path) noexcept
+{
+    log_trace("path:{}", path);
+    try
+    {
+        g_vfs->unlink(path);
+    }
+    catch (...)
+    {
+        return gen_return_error_code();
+    }
+    return 0;
+}
+
+static int symlink(const char* target, const char* link_path) noexcept
+{
+    log_trace("path:{}", link_path);
+    try
+    {
+        g_vfs->symlink(target, link_path);
+    }
+    catch (...)
+    {
+        return gen_return_error_code();
+    }
+    return 0;
+}
+
+static int rename(const char* old_path, const char* new_path) noexcept
+{
+    log_trace("path:{}->{}", old_path, new_path);
+    try
+    {
+        g_vfs->rename(old_path, new_path);
+    }
+    catch (...)
+    {
+        return gen_return_error_code();
+    }
+    return 0;
+}
+
+static int chmod(const char* path, const mode_t mode) noexcept
+{
+    log_trace("path:{}", path);
+    try
+    {
+        g_vfs->chmod(path, mode);
+    }
+    catch (...)
+    {
+        return gen_return_error_code();
+    }
+    return 0;
+}
+
 //==========================================================================
 
 Fuse::Fuse(IVfs& vfs)
@@ -124,6 +194,11 @@ Fuse::Fuse(IVfs& vfs)
     g_oper.readdir = readdir;
     g_oper.readlink = readlink;
     g_oper.mkdir = mkdir;
+    g_oper.rmdir = rmdir;
+    g_oper.unlink = unlink;
+    g_oper.symlink = symlink;
+    g_oper.rename = rename;
+    g_oper.chmod = chmod;
 }
 
 //--------------------------------------------------------------------------

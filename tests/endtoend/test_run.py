@@ -131,3 +131,97 @@ class TestBrowsing(TestClientServer):
             os.mkdir(self.mount_dir + "/x")
         with self.assertRaises(FileExistsError):
             os.mkdir(self.mount_dir + "/somefile")
+
+    def test_rmdir(self):
+        os.makedirs(self.source_dir + "/a/b/c")
+        os.makedirs(self.source_dir + "/d")
+        with open(self.source_dir + "/a/b/c/x", "w"):
+            pass
+        with open(self.source_dir + "/y", "w"):
+            pass
+
+        with self.assertRaises(OSError):
+            os.rmdir(self.mount_dir + "/a/b/c")
+        with self.assertRaises(NotADirectoryError):
+            os.rmdir(self.mount_dir + "/a/b/c/x")
+        with self.assertRaises(NotADirectoryError):
+            os.rmdir(self.mount_dir + "/y")
+
+        os.unlink(self.source_dir + "/a/b/c/x")
+        os.rmdir(self.mount_dir + "/a/b/c")
+        self.assertFalse(os.path.isdir(self.mount_dir + "/a/b/c"))
+        os.rmdir(self.mount_dir + "/a/b")
+        self.assertFalse(os.path.isdir(self.mount_dir + "/a/b"))
+        os.rmdir(self.mount_dir + "/a")
+        self.assertFalse(os.path.isdir(self.mount_dir + "/a"))
+        os.rmdir(self.mount_dir + "/d")
+        self.assertFalse(os.path.isdir(self.mount_dir + "/d"))
+
+    def test_unlink(self):
+        os.makedirs(self.source_dir + "/a/b/c")
+        os.makedirs(self.source_dir + "/d")
+        with open(self.source_dir + "/a/b/c/x", "w"):
+            pass
+        with open(self.source_dir + "/y", "w"):
+            pass
+
+        with self.assertRaises(IsADirectoryError):
+            os.unlink(self.mount_dir + "/a/b/c")
+        with self.assertRaises(IsADirectoryError):
+            os.unlink(self.mount_dir + "/d")
+
+        os.unlink(self.mount_dir + "/a/b/c/x")
+        os.unlink(self.mount_dir + "/y")
+
+        self.assertFalse(os.path.isfile(self.mount_dir + "/a/b/c/x"))
+        self.assertFalse(os.path.isfile(self.mount_dir + "/y"))
+
+    def test_create_symlink(self):
+        os.symlink("abc", self.mount_dir + "/link")
+        os.mkdir(self.mount_dir + "/d")
+        os.symlink("sdgf/wer", self.mount_dir + "/d/link")
+
+        self.assertTrue(os.path.islink(self.source_dir + "/link"))
+        self.assertEqual(os.readlink(self.source_dir + "/link"), "abc")
+        self.assertTrue(os.path.islink(self.source_dir + "/d/link"))
+        self.assertEqual(os.readlink(self.source_dir + "/d/link"), "sdgf/wer")
+
+    def test_rename(self):
+        os.makedirs(self.source_dir + "/d")
+        os.makedirs(self.source_dir + "/d2")
+        os.makedirs(self.source_dir + "/s1")
+        os.makedirs(self.source_dir + "/s2")
+        with open(self.source_dir + "/d2/fle", "w"):
+            pass
+        with open(self.source_dir + "/x", "w"):
+            pass
+        with open(self.source_dir + "/x2", "w"):
+            pass
+
+        with self.assertRaises(OSError):
+            os.rename(self.mount_dir + "/d", self.mount_dir + "/d2")
+        with self.assertRaises(OSError):
+            os.rename(self.mount_dir + "/x", self.mount_dir + "/a/b/c")
+
+        os.rename(self.mount_dir + "/d", self.mount_dir + "/d3")
+        os.rename(self.mount_dir + "/x", self.mount_dir + "/x3")
+        os.rename(self.mount_dir + "/s1", self.mount_dir + "/s2/s")
+
+        self.assertFalse(os.path.isdir(self.source_dir + "/d"))
+        self.assertTrue(os.path.isdir(self.source_dir + "/d3"))
+        self.assertFalse(os.path.isfile(self.source_dir + "/x"))
+        self.assertTrue(os.path.isfile(self.source_dir + "/x3"))
+        self.assertFalse(os.path.isdir(self.source_dir + "/s1"))
+        self.assertTrue(os.path.isdir(self.source_dir + "/s2/s"))
+
+    def test_chmod(self):
+        with open(self.source_dir + "/x", "w"):
+            pass
+
+        os.chmod(self.mount_dir + "/x", 0o777)
+        self.assertEqual(os.stat(self.source_dir + "/x").st_mode & 0o777, 0o777)
+        self.assertEqual(os.stat(self.mount_dir + "/x").st_mode & 0o777, 0o777)
+
+        os.chmod(self.mount_dir + "/x", 0o741)
+        self.assertEqual(os.stat(self.source_dir + "/x").st_mode & 0o777, 0o741)
+        self.assertEqual(os.stat(self.mount_dir + "/x").st_mode & 0o777, 0o741)
