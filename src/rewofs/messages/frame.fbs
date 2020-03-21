@@ -21,6 +21,8 @@ union Message
     CommandOpen,
     CommandRead,
     ResultRead,
+    CommandWrite,
+    ResultWrite,
 
     CommandClose,
     ResultErrno

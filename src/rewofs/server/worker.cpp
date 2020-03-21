@@ -60,6 +60,7 @@ Worker::Worker(server::Transport& transport)
     SUB(CommandChmod, process_chmod);
     SUB(CommandOpen, process_open);
     SUB(CommandRead, process_read);
+    SUB(CommandWrite, process_write);
 }
 
 //--------------------------------------------------------------------------
@@ -388,6 +389,31 @@ flatbuffers::Offset<messages::ResultRead>
 
     const auto data = fbb.CreateVector(buffer.data(), static_cast<size_t>(res));
     return messages::CreateResultRead(fbb, res, 0, data);
+}
+
+//--------------------------------------------------------------------------
+
+flatbuffers::Offset<messages::ResultWrite>
+    Worker::process_write(flatbuffers::FlatBufferBuilder& fbb,
+                          const messages::CommandWrite& msg)
+{
+    const auto fd = get_file_descriptor(msg.file_handle());
+
+    const auto new_ofs = lseek(fd, msg.offset(), SEEK_SET);
+    if (new_ofs != msg.offset())
+    {
+        return messages::CreateResultWrite(fbb, -1, EIO);
+    }
+
+    const auto res = write(fd, msg.data()->data(), msg.data()->size());
+    log_trace("fd:{} res:{}", fd, res);
+
+    if (res < 0)
+    {
+        return messages::CreateResultWrite(fbb, res, errno);
+    }
+
+    return messages::CreateResultWrite(fbb, res, 0);
 }
 
 //==========================================================================

@@ -217,10 +217,25 @@ static int read(const char* path, char* output, size_t size, off_t offset,
     log_trace("path:{} handle:{} size:{} ofs:{}", path, fi->fh, size, offset);
     try
     {
-        std::fill(output, output+size, 'a');
         return static_cast<int>(g_vfs->read(IVfs::FileHandle{fi->fh},
                                             {reinterpret_cast<uint8_t*>(output), size},
                                             offset));
+    }
+    catch (...)
+    {
+        return gen_return_error_code();
+    }
+}
+
+static int write(const char* path, const char* input, size_t size, off_t offset,
+                struct fuse_file_info* fi) noexcept
+{
+    log_trace("path:{} handle:{} size:{} ofs:{}", path, fi->fh, size, offset);
+    try
+    {
+        return static_cast<int>(
+            g_vfs->write(IVfs::FileHandle{fi->fh},
+                         {reinterpret_cast<const uint8_t*>(input), size}, offset));
     }
     catch (...)
     {
@@ -249,7 +264,7 @@ Fuse::Fuse(IVfs& vfs)
     g_oper.create = callbacks::create;
     g_oper.open = callbacks::open;
     g_oper.read = callbacks::read;
-    //g_oper.write = callbacks::write;
+    g_oper.write = callbacks::write;
     //g_oper.truncate = callbacks::truncate;
     //g_oper.release = callbacks::release;
 }

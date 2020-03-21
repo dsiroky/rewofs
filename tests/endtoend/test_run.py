@@ -311,3 +311,46 @@ class TestIO(TestClientServer):
             self.assertEqual(fr.read(2000), data[500000:502000])
             fr.seek(5000000)
             self.assertEqual(fr.read(1000000), data[5000000:6000000])
+
+    def test_write_open_separate(self):
+        self.run_client()
+
+        data1 = os.urandom(10000000)
+        with open(self.mount_dir + "/f1", "wb") as fw:
+            fw.write(data1)
+        data2 = os.urandom(10000000)
+        with open(self.mount_dir + "/f2", "wb") as fw:
+            fw.write(data2)
+
+        with open(self.source_dir + "/f1", "rb") as fr:
+            self.assertEqual(data1, fr.read())
+        with open(self.source_dir + "/f2", "rb") as fr:
+            self.assertEqual(data2, fr.read())
+
+    def test_write_open_together(self):
+        self.run_client()
+
+        data1 = os.urandom(10000000)
+        data2 = os.urandom(10000000)
+        with open(self.mount_dir + "/f1", "wb") as fw1:
+            with open(self.mount_dir + "/f2", "wb") as fw2:
+                fw1.write(data1)
+                fw2.write(data2)
+
+        with open(self.source_dir + "/f1", "rb") as fr:
+                self.assertEqual(data1, fr.read())
+        with open(self.source_dir + "/f2", "rb") as fr:
+                self.assertEqual(data2, fr.read())
+
+    def test_sparse_write(self):
+        self.run_client()
+
+        with open(self.mount_dir + "/f", "wb") as fw:
+            fw.seek(1000)
+            fw.write(b"abc")
+            fw.seek(10000000)
+            fw.write(b"123")
+
+        with open(self.source_dir + "/f", "rb") as fr:
+                data = (b'\0' * 1000) + b"abc" + (b'\0' * (10000000 - 1000 - 3)) + b"123"
+                self.assertEqual(data, fr.read())

@@ -69,6 +69,9 @@ private:
     flatbuffers::Offset<messages::ResultRead>
         process_read(flatbuffers::FlatBufferBuilder& fbb,
                         const messages::CommandRead& msg);
+    flatbuffers::Offset<messages::ResultWrite>
+        process_write(flatbuffers::FlatBufferBuilder& fbb,
+                        const messages::CommandWrite& msg);
 
     /// @return -1 if not found
     int get_file_descriptor(const uint64_t fh);

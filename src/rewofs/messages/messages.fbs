@@ -112,6 +112,25 @@ table CommandRead
   size:uint64;
   open_params:OpenParams;
 }
+table ResultRead
+{
+    res:int64;
+    res_errno:int32;
+    data:[ubyte];
+}
+
+table CommandWrite
+{
+  file_handle:uint64;
+  offset:int64;
+  data:[ubyte];
+  open_params:OpenParams;
+}
+table ResultWrite
+{
+    res:int64;
+    res_errno:int32;
+}
 
 table CommandClose
 {
@@ -121,11 +140,4 @@ table CommandClose
 table ResultErrno
 {
     res_errno:int32;
-}
-
-table ResultRead
-{
-    res:int64;
-    res_errno:int32;
-    data:[ubyte];
 }
