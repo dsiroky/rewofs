@@ -371,6 +371,12 @@ flatbuffers::Offset<messages::ResultRead>
 {
     const auto fd = get_file_descriptor(msg.file_handle());
 
+    const auto new_ofs = lseek(fd, msg.offset(), SEEK_SET);
+    if (new_ofs != msg.offset())
+    {
+        return messages::CreateResultReadDirect(fbb, -1, EIO);
+    }
+
     std::vector<uint8_t> buffer(msg.size());
     const auto res = read(fd, buffer.data(), msg.size());
     log_trace("fd:{} res:{}", fd, res);

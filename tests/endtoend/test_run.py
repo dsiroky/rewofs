@@ -54,13 +54,17 @@ class TestClientServer(unittest.TestCase):
 
         self.server = Popen([REWOFS_PROG, "--serve", self.source_dir,
                                             "--listen", "ipc:///tmp/rewofs.ipc"])
+        self.client = None
+
+    def run_client(self):
         self.client = Popen([REWOFS_PROG, "--mountpoint", self.mount_dir,
                                             "--connect", "ipc:///tmp/rewofs.ipc"])
         # let it settle
         time.sleep(0.5)
 
     def tearDown(self):
-        self.client.kill()
+        if self.client is not None:
+            self.client.kill()
         self.server.kill()
         os.system("fusermount -u " + self.mount_dir)
 
@@ -78,6 +82,8 @@ class TestBrowsing(TestClientServer):
         with open(self.source_dir + "/x/bin.box", "w"):
             pass
         os.symlink(self.source_dir + "/hurdygurdy", self.source_dir + "/a/bb/link")
+
+        self.run_client()
 
         self.assertTrue(os.path.isdir(self.mount_dir + "/a"))
         self.assertTrue(os.path.isdir(self.mount_dir + "/a/b"))
@@ -104,6 +110,8 @@ class TestBrowsing(TestClientServer):
         with open(self.source_dir + "/notlink", "w"):
             pass
 
+        self.run_client()
+
         self.assertEqual(os.readlink(self.mount_dir + "/lnk"), "a")
         self.assertEqual(os.readlink(self.mount_dir + "/lnk2"), "a/b/c")
         self.assertEqual(os.readlink(self.mount_dir + "/lnk3"), "/someroot/a/b/c")
@@ -115,6 +123,8 @@ class TestBrowsing(TestClientServer):
             os.readlink(self.mount_dir + "/notlink")
 
     def test_mkdir(self):
+        self.run_client()
+
         os.mkdir(self.mount_dir + "/x")
         os.makedirs(self.mount_dir + "/a/b/c")
 
@@ -122,10 +132,12 @@ class TestBrowsing(TestClientServer):
         self.assertTrue(os.path.isdir(self.source_dir + "/a/b/c"));
 
     def test_mkdir_on_existing(self):
-        os.mkdir(self.mount_dir + "/x")
         with open(self.source_dir + "/somefile", "w"):
             pass
 
+        self.run_client()
+
+        os.mkdir(self.mount_dir + "/x")
         with self.assertRaises(FileExistsError):
             os.mkdir(self.mount_dir + "/x")
         with self.assertRaises(FileExistsError):
@@ -139,6 +151,8 @@ class TestBrowsing(TestClientServer):
         with open(self.source_dir + "/y", "w"):
             pass
 
+        self.run_client()
+
         with self.assertRaises(OSError):
             os.rmdir(self.mount_dir + "/a/b/c")
         with self.assertRaises(NotADirectoryError):
@@ -146,7 +160,7 @@ class TestBrowsing(TestClientServer):
         with self.assertRaises(NotADirectoryError):
             os.rmdir(self.mount_dir + "/y")
 
-        os.unlink(self.source_dir + "/a/b/c/x")
+        os.unlink(self.mount_dir + "/a/b/c/x")
         os.rmdir(self.mount_dir + "/a/b/c")
         self.assertFalse(os.path.isdir(self.mount_dir + "/a/b/c"))
         os.rmdir(self.mount_dir + "/a/b")
@@ -164,6 +178,8 @@ class TestBrowsing(TestClientServer):
         with open(self.source_dir + "/y", "w"):
             pass
 
+        self.run_client()
+
         with self.assertRaises(IsADirectoryError):
             os.unlink(self.mount_dir + "/a/b/c")
         with self.assertRaises(IsADirectoryError):
@@ -176,6 +192,8 @@ class TestBrowsing(TestClientServer):
         self.assertFalse(os.path.isfile(self.mount_dir + "/y"))
 
     def test_create_symlink(self):
+        self.run_client()
+
         os.symlink("abc", self.mount_dir + "/link")
         os.mkdir(self.mount_dir + "/d")
         os.symlink("sdgf/wer", self.mount_dir + "/d/link")
@@ -197,6 +215,8 @@ class TestBrowsing(TestClientServer):
         with open(self.source_dir + "/x2", "w"):
             pass
 
+        self.run_client()
+
         with self.assertRaises(OSError):
             os.rename(self.mount_dir + "/d", self.mount_dir + "/d2")
         with self.assertRaises(OSError):
@@ -217,6 +237,8 @@ class TestBrowsing(TestClientServer):
         with open(self.source_dir + "/x", "w"):
             pass
 
+        self.run_client()
+
         os.chmod(self.mount_dir + "/x", 0o777)
         self.assertEqual(os.stat(self.source_dir + "/x").st_mode & 0o777, 0o777)
         self.assertEqual(os.stat(self.mount_dir + "/x").st_mode & 0o777, 0o777)
@@ -231,6 +253,8 @@ class TestIO(TestClientServer):
     def test_open(self):
         with open(self.source_dir + "/existing", "w"):
             pass
+
+        self.run_client()
 
         with self.assertRaises(OSError):
             open(self.mount_dir + "/x", "r")
@@ -251,6 +275,8 @@ class TestIO(TestClientServer):
         with open(self.source_dir + "/f2", "wb") as fw:
             fw.write(data2)
 
+        self.run_client()
+
         with open(self.mount_dir + "/f1", "rb") as fr:
             self.assertEqual(data1, fr.read())
         with open(self.mount_dir + "/f2", "rb") as fr:
@@ -264,7 +290,24 @@ class TestIO(TestClientServer):
         with open(self.source_dir + "/f2", "wb") as fw:
             fw.write(data2)
 
+        self.run_client()
+
         with open(self.mount_dir + "/f1", "rb") as fr1:
             with open(self.mount_dir + "/f2", "rb") as fr2:
                 self.assertEqual(data1, fr1.read())
                 self.assertEqual(data2, fr2.read())
+
+    def test_random_read(self):
+        data = os.urandom(10000000)
+        with open(self.source_dir + "/f", "wb") as fw:
+            fw.write(data)
+
+        self.run_client()
+
+        with open(self.mount_dir + "/f", "rb") as fr:
+            fr.seek(50000)
+            self.assertEqual(fr.read(2000), data[50000:52000])
+            fr.seek(500000)
+            self.assertEqual(fr.read(2000), data[500000:502000])
+            fr.seek(5000000)
+            self.assertEqual(fr.read(1000000), data[5000000:6000000])

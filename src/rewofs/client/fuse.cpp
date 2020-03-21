@@ -250,7 +250,6 @@ Fuse::Fuse(IVfs& vfs)
     g_oper.open = callbacks::open;
     g_oper.read = callbacks::read;
     //g_oper.write = callbacks::write;
-    //g_oper.lseek = callbacks::lseek; ???
     //g_oper.truncate = callbacks::truncate;
     //g_oper.release = callbacks::release;
 }
