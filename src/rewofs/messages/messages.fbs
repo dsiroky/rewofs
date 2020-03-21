@@ -90,11 +90,27 @@ table CommandChmod
     mode:uint32;
 }
 
+struct OpenParams
+{
+  flags:int32;
+  /// true means use a mode value
+  set_mode:bool;
+  mode:uint32;
+}
+
 table CommandOpen
 {
   path:string;
-  flags:int32;
-  mode:uint32;
+  file_handle:uint64;
+  params:OpenParams;
+}
+
+table CommandRead
+{
+  file_handle:uint64;
+  offset:int64;
+  size:uint64;
+  open_params:OpenParams;
 }
 
 table CommandClose
@@ -109,6 +125,7 @@ table ResultErrno
 
 table ResultRead
 {
-    res:int32;
+    res:int64;
+    res_errno:int32;
     data:[ubyte];
 }

@@ -2,7 +2,9 @@
 ///
 /// @file
 
+#include <fcntl.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 
 #include "rewofs/log.hpp"
 #include "rewofs/server/worker.hpp"
@@ -27,6 +29,7 @@ void copy(struct stat& src, messages::Stat& dst)
 {
     dst.mutate_st_mode(src.st_mode);
     dst.mutate_st_nlink(src.st_nlink);
+    dst.mutate_st_size(src.st_size);
     copy(src.st_atim, dst.mutable_st_atim());
     copy(src.st_ctim, dst.mutable_st_ctim());
     copy(src.st_mtim, dst.mutable_st_mtim());
@@ -55,6 +58,8 @@ Worker::Worker(server::Transport& transport)
     SUB(CommandSymlink, process_symlink);
     SUB(CommandRename, process_rename);
     SUB(CommandChmod, process_chmod);
+    SUB(CommandOpen, process_open);
+    SUB(CommandRead, process_read);
 }
 
 //--------------------------------------------------------------------------
@@ -314,6 +319,69 @@ flatbuffers::Offset<messages::ResultErrno>
     }
 
     return messages::CreateResultErrno(fbb, 0);
+}
+
+//--------------------------------------------------------------------------
+
+flatbuffers::Offset<messages::ResultErrno>
+    Worker::process_open(flatbuffers::FlatBufferBuilder& fbb,
+                          const messages::CommandOpen& msg)
+{
+    const auto path = map_path(msg.path()->c_str());
+
+    int res{-1};
+    if (msg.params()->set_mode())
+    {
+        res = open(path.c_str(), msg.params()->flags(), msg.params()->mode());
+    }
+    else
+    {
+        res = open(path.c_str(), msg.params()->flags());
+    }
+    log_trace("{} fd:{}", path.native(), res);
+
+    if (res < 0)
+    {
+        return messages::CreateResultErrno(fbb, errno);
+    }
+
+    std::lock_guard lg{m_mutex};
+    assert(m_opened_files.find(msg.file_handle()) == m_opened_files.end());
+    m_opened_files.emplace(std::make_pair(msg.file_handle(), res));
+    return messages::CreateResultErrno(fbb, 0);
+}
+
+//--------------------------------------------------------------------------
+
+int Worker::get_file_descriptor(const uint64_t fh)
+{
+    const auto it = m_opened_files.find(fh);
+    if (it == m_opened_files.end())
+    {
+        return -1;
+    }
+    return it->second;
+}
+
+//--------------------------------------------------------------------------
+
+flatbuffers::Offset<messages::ResultRead>
+    Worker::process_read(flatbuffers::FlatBufferBuilder& fbb,
+                         const messages::CommandRead& msg)
+{
+    const auto fd = get_file_descriptor(msg.file_handle());
+
+    std::vector<uint8_t> buffer(msg.size());
+    const auto res = read(fd, buffer.data(), msg.size());
+    log_trace("fd:{} res:{}", fd, res);
+
+    if (res < 0)
+    {
+        return messages::CreateResultReadDirect(fbb, res, errno);
+    }
+
+    const auto data = fbb.CreateVector(buffer.data(), static_cast<size_t>(res));
+    return messages::CreateResultRead(fbb, res, 0, data);
 }
 
 //==========================================================================

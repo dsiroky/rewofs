@@ -29,7 +29,7 @@ public:
     //--------------------------------
 private:
     const boost::program_options::variables_map& m_options;
-    Serializer m_serializer{0}; // TODO seed
+    Serializer m_serializer{};
     Deserializer m_deserializer{};
     client::Transport m_transport{m_serializer, m_deserializer};
     RemoteVfs m_remote_vfs{m_serializer, m_deserializer};

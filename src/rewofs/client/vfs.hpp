@@ -6,6 +6,9 @@
 #ifndef VFS_HPP__TI3ABKYJ
 #define VFS_HPP__TI3ABKYJ
 
+#include <optional>
+#include <unordered_map>
+
 #include <sys/stat.h>
 
 #include "rewofs/disablewarnings.hpp"
@@ -21,6 +24,9 @@ namespace rewofs::client {
 class IVfs
 {
 public:
+    using FileHandle
+        = strong::type<uint64_t, struct FileHandle_, strong::equality, strong::hashable>;
+
     virtual ~IVfs() = default;
 
     using Path = boost::filesystem::path;
@@ -37,6 +43,11 @@ public:
     virtual void rename(const Path& old_path, const Path& new_path)
         = 0;
     virtual void chmod(const Path& path, const mode_t mode) = 0;
+    virtual uint64_t open(const Path& path, const int flags, const mode_t mode) = 0;
+    virtual uint64_t open(const Path& path, const int flags) = 0;
+    virtual ssize_t read(const FileHandle fh, const gsl::span<uint8_t> output,
+                         const off_t offset)
+        = 0;
 
 private:
 };
@@ -48,6 +59,9 @@ class RemoteVfs : public IVfs, private boost::noncopyable
 public:
     RemoteVfs(Serializer& serializer, Deserializer& deserializer);
 
+    /// Seed for unique identifiers.
+    void set_seed(const uint64_t seed);
+
     void getattr(const Path&, struct stat& st) override;
     void readdir(const Path&, const DirFiller& filler) override;
     std::string readlink(const Path& path) override;
@@ -57,9 +71,28 @@ public:
     void symlink(const Path& target, const Path& link_path) override;
     void rename(const Path& old_path, const Path& new_path) override;
     void chmod(const Path& path, const mode_t mode) override;
+    uint64_t open(const Path& path, const int flags, const mode_t mode) override;
+    uint64_t open(const Path& path, const int flags) override;
+    ssize_t read(const FileHandle fh, const gsl::span<uint8_t> output,
+                 const off_t offset) override;
 
     //--------------------------------
 private:
+    static constexpr std::chrono::seconds TIMEOUT{5};
+
+    struct FileParams
+    {
+        Path path{};
+        struct
+        {
+            int32_t flags{};
+            std::optional<uint32_t> mode{};
+        } open_params{};
+    };
+
+    uint64_t open_common(const Path& path, const int flags,
+                         const std::optional<mode_t> mode);
+
     template<typename _Result, typename _Command>
     Deserializer::Result<_Result>
         single_command(flatbuffers::FlatBufferBuilder& fbb,
@@ -67,7 +100,9 @@ private:
 
     Serializer& m_serializer;
     Deserializer& m_deserializer;
-    static constexpr std::chrono::seconds TIMEOUT{5};
+    std::atomic<uint64_t> m_open_id_dispenser{};
+    std::mutex m_mutex{};
+    std::unordered_map<FileHandle, FileParams> m_opened_files{};
 };
 
 //--------------------------------------------------------------------------

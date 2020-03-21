@@ -9,55 +9,9 @@
 namespace rewofs {
 //==========================================================================
 
-flatbuffers::Offset<messages::CommandStat>
-    make_command_stat(flatbuffers::FlatBufferBuilder& fbb, const std::string& path)
+void Serializer::set_msgid_seed(const uint64_t seed)
 {
-    auto fn = fbb.CreateString(path);
-    return messages::CreateCommandStat(fbb, fn);
-}
-
-//--------------------------------------------------------------------------
-
-flatbuffers::Offset<messages::CommandReaddir>
-    make_command_readdir(flatbuffers::FlatBufferBuilder& fbb, const std::string& path)
-{
-    auto fn = fbb.CreateString(path);
-    return messages::CreateCommandReaddir(fbb, fn);
-}
-
-//--------------------------------------------------------------------------
-
-flatbuffers::Offset<messages::CommandReadlink>
-    make_command_readlink(flatbuffers::FlatBufferBuilder& fbb, const std::string& path)
-{
-    auto fn = fbb.CreateString(path);
-    return messages::CreateCommandReadlink(fbb, fn);
-}
-
-//--------------------------------------------------------------------------
-
-flatbuffers::Offset<messages::CommandOpen>
-    make_command_open(flatbuffers::FlatBufferBuilder& fbb, const std::string& path,
-                      const int flags)
-{
-    auto fn = fbb.CreateString(path);
-    return messages::CreateCommandOpen(fbb, fn, flags);
-}
-
-//--------------------------------------------------------------------------
-
-flatbuffers::Offset<messages::CommandClose>
-    make_command_close(flatbuffers::FlatBufferBuilder& fbb, const std::string& path)
-{
-    auto fn = fbb.CreateString(path);
-    return messages::CreateCommandClose(fbb, fn);
-}
-
-//==========================================================================
-
-Serializer::Serializer(const uint64_t msgid_seed)
-    : m_id_dispenser{msgid_seed}
-{
+    m_id_dispenser = seed;
 }
 
 //--------------------------------------------------------------------------
@@ -66,6 +20,7 @@ Serializer::QueueRef Serializer::new_queue(const Priority priority)
 {
     Queue q{};
     q.priority = priority;
+    std::unique_lock lg{m_mutex};
     m_queues.emplace_back(std::move(q));
     return QueueRef{*this, std::prev(m_queues.end())};
 }

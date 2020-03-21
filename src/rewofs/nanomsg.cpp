@@ -5,7 +5,9 @@
 #include <fmt/format.h>
 #include <nanomsg/nn.h>
 
+#include "rewofs/disablewarnings.hpp"
 #include <boost/scope_exit.hpp>
+#include "rewofs/enablewarnings.hpp"
 
 #include "rewofs/nanomsg.hpp"
 

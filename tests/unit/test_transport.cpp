@@ -20,18 +20,19 @@ namespace rmsg = rewofs::messages;
 
 TEST(Serializer, AddCommand_SingleQueue)
 {
-    Serializer serializer{345};
+    Serializer serializer{};
+    serializer.set_msgid_seed(345);
 
     auto queue = serializer.new_queue(Serializer::Priority{7});
 
     {
         flatbuffers::FlatBufferBuilder fbb{};
-        auto command = make_command_open(fbb, "/some/file", 3);
+        auto command = messages::CreateCommandMkdirDirect(fbb, "/some/file", 3);
         serializer.add_command(queue, fbb, command);
     }
     {
         flatbuffers::FlatBufferBuilder fbb{};
-        auto command = make_command_close(fbb, "/other/iii");
+        auto command = messages::CreateCommandChmodDirect(fbb, "/other/iii", 123);
         serializer.add_command(queue, fbb, command);
     }
 
@@ -43,8 +44,8 @@ TEST(Serializer, AddCommand_SingleQueue)
         ASSERT_GT(raw_frame.size(), 0);
         const auto frame = rmsg::GetFrame(raw_frame.data());
         EXPECT_EQ(frame->id(), 345);
-        ASSERT_EQ(frame->message_type(), rmsg::Message::CommandOpen);
-        const auto message = static_cast<const rmsg::CommandOpen*>(frame->message());
+        ASSERT_EQ(frame->message_type(), rmsg::Message::CommandMkdir);
+        const auto message = static_cast<const rmsg::CommandMkdir*>(frame->message());
         EXPECT_EQ(message->path()->str(), "/some/file");
     }
     {
@@ -55,7 +56,7 @@ TEST(Serializer, AddCommand_SingleQueue)
         ASSERT_GT(raw_frame.size(), 0);
         const auto frame = rmsg::GetFrame(raw_frame.data());
         EXPECT_EQ(frame->id(), 346);
-        ASSERT_EQ(frame->message_type(), rmsg::Message::CommandClose);
+        ASSERT_EQ(frame->message_type(), rmsg::Message::CommandChmod);
     }
     { // no more messages
         std::vector<uint8_t> raw_frame{};
@@ -70,7 +71,8 @@ TEST(Serializer, AddCommand_SingleQueue)
 
 TEST(Serializer, AddCommand_MultipleQueues_Priorities)
 {
-    Serializer serializer{345};
+    Serializer serializer{};
+    serializer.set_msgid_seed(345);
 
     auto queue1 = serializer.new_queue(Serializer::Priority{100});
     auto queue2 = serializer.new_queue(Serializer::Priority{0});
@@ -78,17 +80,17 @@ TEST(Serializer, AddCommand_MultipleQueues_Priorities)
 
     {
         flatbuffers::FlatBufferBuilder fbb{};
-        auto command = make_command_open(fbb, "/a", 3);
+        auto command = messages::CreateCommandChmodDirect(fbb, "/a", 3);
         serializer.add_command(queue1, fbb, command);
     }
     {
         flatbuffers::FlatBufferBuilder fbb{};
-        auto command = make_command_open(fbb, "/b", 3);
+        auto command = messages::CreateCommandChmodDirect(fbb, "/b", 3);
         serializer.add_command(queue2, fbb, command);
     }
     {
         flatbuffers::FlatBufferBuilder fbb{};
-        auto command = make_command_open(fbb, "/c", 3);
+        auto command = messages::CreateCommandChmodDirect(fbb, "/c", 3);
         serializer.add_command(queue3, fbb, command);
     }
 
@@ -100,7 +102,7 @@ TEST(Serializer, AddCommand_MultipleQueues_Priorities)
         ASSERT_GT(raw_frame.size(), 0);
         const auto frame = rmsg::GetFrame(raw_frame.data());
         EXPECT_EQ(frame->id(), 345);
-        const auto cmd = static_cast<const rmsg::CommandOpen*>(frame->message());
+        const auto cmd = static_cast<const rmsg::CommandChmod*>(frame->message());
         EXPECT_EQ(cmd->path()->str(), "/a");
     }
     {
@@ -111,7 +113,7 @@ TEST(Serializer, AddCommand_MultipleQueues_Priorities)
         ASSERT_GT(raw_frame.size(), 0);
         const auto frame = rmsg::GetFrame(raw_frame.data());
         EXPECT_EQ(frame->id(), 347);
-        const auto cmd = static_cast<const rmsg::CommandOpen*>(frame->message());
+        const auto cmd = static_cast<const rmsg::CommandChmod*>(frame->message());
         EXPECT_EQ(cmd->path()->str(), "/c");
     }
     {
@@ -122,7 +124,7 @@ TEST(Serializer, AddCommand_MultipleQueues_Priorities)
         ASSERT_GT(raw_frame.size(), 0);
         const auto frame = rmsg::GetFrame(raw_frame.data());
         EXPECT_EQ(frame->id(), 346);
-        const auto cmd = static_cast<const rmsg::CommandOpen*>(frame->message());
+        const auto cmd = static_cast<const rmsg::CommandChmod*>(frame->message());
         EXPECT_EQ(cmd->path()->str(), "/b");
     }
     { // no more messages
@@ -138,26 +140,27 @@ TEST(Serializer, AddCommand_MultipleQueues_Priorities)
 
 TEST(Serializer, AddCommand_MultipleInterleavedQueues_Priorities)
 {
-    Serializer serializer{345};
+    Serializer serializer{};
+    serializer.set_msgid_seed(345);
 
     auto queue1 = serializer.new_queue(Serializer::Priority{100});
     auto queue2 = serializer.new_queue(Serializer::Priority{0});
 
     {
         flatbuffers::FlatBufferBuilder fbb{};
-        auto command = make_command_open(fbb, "/a", 3);
+        auto command = messages::CreateCommandChmodDirect(fbb, "/a", 3);
         serializer.add_command(queue1, fbb, command);
     }
     {
         auto queue = serializer.new_queue(Serializer::Priority{0});
         flatbuffers::FlatBufferBuilder fbb{};
-        auto command = make_command_open(fbb, "/b", 3);
+        auto command = messages::CreateCommandChmodDirect(fbb, "/b", 3);
         serializer.add_command(queue2, fbb, command);
     }
     {
         auto queue = serializer.new_queue(Serializer::Priority{100});
         flatbuffers::FlatBufferBuilder fbb{};
-        auto command = make_command_open(fbb, "/c", 3);
+        auto command = messages::CreateCommandChmodDirect(fbb, "/c", 3);
         serializer.add_command(queue1, fbb, command);
     }
 
@@ -169,7 +172,7 @@ TEST(Serializer, AddCommand_MultipleInterleavedQueues_Priorities)
         ASSERT_GT(raw_frame.size(), 0);
         const auto frame = rmsg::GetFrame(raw_frame.data());
         EXPECT_EQ(frame->id(), 345);
-        const auto cmd = static_cast<const rmsg::CommandOpen*>(frame->message());
+        const auto cmd = static_cast<const rmsg::CommandChmod*>(frame->message());
         EXPECT_EQ(cmd->path()->str(), "/a");
     }
     {
@@ -180,7 +183,7 @@ TEST(Serializer, AddCommand_MultipleInterleavedQueues_Priorities)
         ASSERT_GT(raw_frame.size(), 0);
         const auto frame = rmsg::GetFrame(raw_frame.data());
         EXPECT_EQ(frame->id(), 347);
-        const auto cmd = static_cast<const rmsg::CommandOpen*>(frame->message());
+        const auto cmd = static_cast<const rmsg::CommandChmod*>(frame->message());
         EXPECT_EQ(cmd->path()->str(), "/c");
     }
     {
@@ -191,7 +194,7 @@ TEST(Serializer, AddCommand_MultipleInterleavedQueues_Priorities)
         ASSERT_GT(raw_frame.size(), 0);
         const auto frame = rmsg::GetFrame(raw_frame.data());
         EXPECT_EQ(frame->id(), 346);
-        const auto cmd = static_cast<const rmsg::CommandOpen*>(frame->message());
+        const auto cmd = static_cast<const rmsg::CommandChmod*>(frame->message());
         EXPECT_EQ(cmd->path()->str(), "/b");
     }
     { // no more messages
@@ -245,13 +248,12 @@ TEST(Distributor, ProcessKnownMessage_CallsSubscribedCallback)
     bool close_called{false};
 
     rewofs::Distributor distributor{};
-    distributor.subscribe<rmsg::CommandOpen>(
-        [&open_called](const MessageId mid, const rmsg::CommandOpen& msg) {
+    distributor.subscribe<rmsg::CommandChmod>(
+        [&open_called](const MessageId mid, const rmsg::CommandChmod& msg) {
             open_called = true;
             EXPECT_EQ(mid, MessageId{6442});
             EXPECT_EQ(msg.path()->str(), std::string{"/this/file"});
-            EXPECT_EQ(msg.flags(), 98);
-            EXPECT_FALSE(flatbuffers::IsFieldPresent(&msg, rmsg::CommandOpen::VT_MODE));
+            EXPECT_EQ(msg.mode(), 98);
         });
     distributor.subscribe<rmsg::CommandClose>(
         [&close_called](const MessageId, const rmsg::CommandClose&) {
@@ -259,7 +261,7 @@ TEST(Distributor, ProcessKnownMessage_CallsSubscribedCallback)
         });
 
     flatbuffers::FlatBufferBuilder fbb{};
-    auto command = make_command_open(fbb, "/this/file", 98);
+    auto command = messages::CreateCommandChmodDirect(fbb, "/this/file", 98);
     auto frame = make_frame(fbb, 6442, command);
     fbb.Finish(frame);
 

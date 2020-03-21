@@ -23,6 +23,7 @@ void copy(const messages::Stat& src, struct stat& dst)
 {
     dst.st_mode = src.st_mode();
     dst.st_nlink = src.st_nlink();
+    dst.st_size = src.st_size();
     copy(src.st_atim(), dst.st_atim);
     copy(src.st_ctim(), dst.st_ctim);
     copy(src.st_mtim(), dst.st_mtim);
@@ -40,10 +41,17 @@ RemoteVfs::RemoteVfs(Serializer& serializer, Deserializer& deserializer)
 
 //--------------------------------------------------------------------------
 
+void RemoteVfs::set_seed(const uint64_t seed)
+{
+    m_open_id_dispenser = seed;
+}
+
+//--------------------------------------------------------------------------
+
 void RemoteVfs::getattr(const Path& path, struct stat& st)
 {
     flatbuffers::FlatBufferBuilder fbb{};
-    const auto command = make_command_stat(fbb, path.native());
+    const auto command = messages::CreateCommandStatDirect(fbb, path.c_str());
     const auto res = single_command<messages::ResultStat>(fbb, command);
 
     const auto& message = res.message();
@@ -60,7 +68,7 @@ void RemoteVfs::getattr(const Path& path, struct stat& st)
 void RemoteVfs::readdir(const Path& path, const DirFiller& filler)
 {
     flatbuffers::FlatBufferBuilder fbb{};
-    const auto command = make_command_readdir(fbb, path.native());
+    const auto command = messages::CreateCommandReaddirDirect(fbb, path.c_str());
     const auto res = single_command<messages::ResultReaddir>(fbb, command);
 
     const auto& message = res.message();
@@ -89,7 +97,7 @@ void RemoteVfs::readdir(const Path& path, const DirFiller& filler)
 std::string RemoteVfs::readlink(const Path& path)
 {
     flatbuffers::FlatBufferBuilder fbb{};
-    const auto command = make_command_readlink(fbb, path.native());
+    const auto command = messages::CreateCommandReadlinkDirect(fbb, path.c_str());
     const auto res = single_command<messages::ResultReadlink>(fbb, command);
 
     const auto& message = res.message();
@@ -191,6 +199,78 @@ void RemoteVfs::chmod(const Path& path, const mode_t mode)
     {
         throw std::system_error{message.res_errno(), std::generic_category()};
     }
+}
+
+//--------------------------------------------------------------------------
+
+uint64_t RemoteVfs::open_common(const Path& path, const int flags,
+                                const std::optional<mode_t> mode)
+{
+    flatbuffers::FlatBufferBuilder fbb{};
+    const auto new_open_id = m_open_id_dispenser++;
+    const messages::OpenParams open_params{flags, mode.has_value(), mode.value_or(0)};
+    const auto command = messages::CreateCommandOpenDirect(
+        fbb, path.c_str(), strong::value_of(new_open_id), &open_params);
+    const auto res = single_command<messages::ResultErrno>(fbb, command);
+
+    const auto& message = res.message();
+    if (message.res_errno() != 0)
+    {
+        throw std::system_error{message.res_errno(), std::generic_category()};
+    }
+
+    std::lock_guard lg{m_mutex};
+    FileParams fparams{};
+    fparams.path = path;
+    fparams.open_params.flags = flags;
+    fparams.open_params.mode = mode;
+    m_opened_files.emplace(std::make_pair(FileHandle{new_open_id}, fparams));
+    return new_open_id;
+}
+
+//--------------------------------------------------------------------------
+
+uint64_t RemoteVfs::open(const Path& path, const int flags, const mode_t mode)
+{
+    return open_common(path, flags, mode);
+}
+
+//--------------------------------------------------------------------------
+
+uint64_t RemoteVfs::open(const Path& path, const int flags)
+{
+    return open_common(path, flags, std::nullopt);
+}
+
+//--------------------------------------------------------------------------
+
+ssize_t RemoteVfs::read(const FileHandle fh, const gsl::span<uint8_t> output,
+                        const off_t offset)
+{
+    std::lock_guard lg{m_mutex};
+    const auto it = m_opened_files.find(fh);
+    if (it == m_opened_files.end())
+    {
+        throw std::system_error{EINVAL, std::generic_category()};
+    }
+    const auto raw_fh = strong::value_of(fh);
+    const auto& open_params = it->second.open_params;
+
+    flatbuffers::FlatBufferBuilder fbb{};
+    const messages::OpenParams msg_open_params{
+        open_params.flags, open_params.mode.has_value(), open_params.mode.value_or(0)};
+    const auto command = messages::CreateCommandRead(fbb, raw_fh, offset, output.size(),
+                                                     &msg_open_params);
+    const auto res = single_command<messages::ResultRead>(fbb, command);
+
+    const auto& message = res.message();
+    if (message.res() < 0)
+    {
+        throw std::system_error{message.res_errno(), std::generic_category()};
+    }
+
+    std::copy(message.data()->begin(), message.data()->end(), output.begin());
+    return message.data()->size();
 }
 
 //==========================================================================

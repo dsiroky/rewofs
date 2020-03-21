@@ -11,8 +11,6 @@ import time
 
 from subprocess import Popen
 
-import nose2.tools as nt
-
 #===========================================================================
 
 REWOFS_PROG = os.environ["REWOFS_PROG"]
@@ -73,8 +71,8 @@ class TestBrowsing(TestClientServer):
         os.makedirs(self.source_dir + "/a/b/c")
         os.makedirs(self.source_dir + "/a/bb")
         os.makedirs(self.source_dir + "/x/y")
-        with open(self.source_dir + "/data", "w"):
-            pass
+        with open(self.source_dir + "/data", "w") as fw:
+            fw.write("abc")
         with open(self.source_dir + "/a/b/file", "w"):
             pass
         with open(self.source_dir + "/x/bin.box", "w"):
@@ -88,6 +86,7 @@ class TestBrowsing(TestClientServer):
         self.assertTrue(os.path.isdir(self.mount_dir + "/x"))
         self.assertTrue(os.path.isdir(self.mount_dir + "/x/y"))
         self.assertTrue(os.path.isfile(self.mount_dir + "/data"))
+        self.assertEqual(os.path.getsize(self.mount_dir + "/data"), 3)
         self.assertTrue(os.path.isfile(self.mount_dir + "/a/b/file"))
         self.assertTrue(os.path.isfile(self.mount_dir + "/x/bin.box"))
         self.assertTrue(os.path.islink(self.mount_dir + "/a/bb/link"))
@@ -225,3 +224,47 @@ class TestBrowsing(TestClientServer):
         os.chmod(self.mount_dir + "/x", 0o741)
         self.assertEqual(os.stat(self.source_dir + "/x").st_mode & 0o777, 0o741)
         self.assertEqual(os.stat(self.mount_dir + "/x").st_mode & 0o777, 0o741)
+
+#===========================================================================
+
+class TestIO(TestClientServer):
+    def test_open(self):
+        with open(self.source_dir + "/existing", "w"):
+            pass
+
+        with self.assertRaises(OSError):
+            open(self.mount_dir + "/x", "r")
+
+        with open(self.mount_dir + "/x", "w"):
+            pass
+        with open(self.mount_dir + "/existing", "r"):
+            pass
+
+        self.assertTrue(os.path.isfile(self.mount_dir + "/x"))
+        self.assertTrue(os.path.isfile(self.source_dir + "/x"))
+
+    def test_read_open_separate(self):
+        data1 = os.urandom(10000000)
+        with open(self.source_dir + "/f1", "wb") as fw:
+            fw.write(data1)
+        data2 = os.urandom(10000000)
+        with open(self.source_dir + "/f2", "wb") as fw:
+            fw.write(data2)
+
+        with open(self.mount_dir + "/f1", "rb") as fr:
+            self.assertEqual(data1, fr.read())
+        with open(self.mount_dir + "/f2", "rb") as fr:
+            self.assertEqual(data2, fr.read())
+
+    def test_read_open_together(self):
+        data1 = os.urandom(10000000)
+        with open(self.source_dir + "/f1", "wb") as fw:
+            fw.write(data1)
+        data2 = os.urandom(10000000)
+        with open(self.source_dir + "/f2", "wb") as fw:
+            fw.write(data2)
+
+        with open(self.mount_dir + "/f1", "rb") as fr1:
+            with open(self.mount_dir + "/f2", "rb") as fr2:
+                self.assertEqual(data1, fr1.read())
+                self.assertEqual(data2, fr2.read())

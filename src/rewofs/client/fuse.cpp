@@ -45,9 +45,8 @@ int gen_return_error_code()
 }
 
 //==========================================================================
-
-static const char *str = "Hello World!\n";
-static const char *path = "/hello";
+namespace callbacks {
+//==========================================================================
 
 static int getattr(const char *path, struct stat *stbuf) noexcept
 {
@@ -71,8 +70,7 @@ static int readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     {
         g_vfs->readdir(path, [buf, filler](const fs::path& path, const struct stat& st) {
             log_trace("{}", path.c_str());
-            //filler(buf, path.c_str(), &st, 0);
-            filler(buf, path.c_str(), nullptr, 0);
+            filler(buf, path.c_str(), &st, 0);
         });
     }
     catch (...)
@@ -183,6 +181,55 @@ static int chmod(const char* path, const mode_t mode) noexcept
     return 0;
 }
 
+static int create(const char* path, mode_t mode, struct fuse_file_info* fi) noexcept
+{
+    log_trace("path:{} mode:{:o}", path, mode);
+    try
+    {
+        fi->fh = g_vfs->open(path, fi->flags, mode);
+        log_trace("handle:{}", fi->fh);
+    }
+    catch (...)
+    {
+        return gen_return_error_code();
+    }
+    return 0;
+}
+
+static int open(const char* path, struct fuse_file_info *fi) noexcept
+{
+    log_trace("path:{}", path);
+    try
+    {
+        fi->fh = g_vfs->open(path, fi->flags);
+        log_trace("handle:{}", fi->fh);
+    }
+    catch (...)
+    {
+        return gen_return_error_code();
+    }
+    return 0;
+}
+
+static int read(const char* path, char* output, size_t size, off_t offset,
+                struct fuse_file_info* fi) noexcept
+{
+    log_trace("path:{} handle:{} size:{} ofs:{}", path, fi->fh, size, offset);
+    try
+    {
+        std::fill(output, output+size, 'a');
+        return static_cast<int>(g_vfs->read(IVfs::FileHandle{fi->fh},
+                                            {reinterpret_cast<uint8_t*>(output), size},
+                                            offset));
+    }
+    catch (...)
+    {
+        return gen_return_error_code();
+    }
+}
+
+//==========================================================================
+} // namespace callbacks
 //==========================================================================
 
 Fuse::Fuse(IVfs& vfs)
@@ -190,15 +237,22 @@ Fuse::Fuse(IVfs& vfs)
 {
     g_vfs = &m_vfs;
 
-    g_oper.getattr = getattr;
-    g_oper.readdir = readdir;
-    g_oper.readlink = readlink;
-    g_oper.mkdir = mkdir;
-    g_oper.rmdir = rmdir;
-    g_oper.unlink = unlink;
-    g_oper.symlink = symlink;
-    g_oper.rename = rename;
-    g_oper.chmod = chmod;
+    g_oper.getattr = callbacks::getattr;
+    g_oper.readdir = callbacks::readdir;
+    g_oper.readlink = callbacks::readlink;
+    g_oper.mkdir = callbacks::mkdir;
+    g_oper.rmdir = callbacks::rmdir;
+    g_oper.unlink = callbacks::unlink;
+    g_oper.symlink = callbacks::symlink;
+    g_oper.rename = callbacks::rename;
+    g_oper.chmod = callbacks::chmod;
+    g_oper.create = callbacks::create;
+    g_oper.open = callbacks::open;
+    g_oper.read = callbacks::read;
+    //g_oper.write = callbacks::write;
+    //g_oper.lseek = callbacks::lseek; ???
+    //g_oper.truncate = callbacks::truncate;
+    //g_oper.release = callbacks::release;
 }
 
 //--------------------------------------------------------------------------

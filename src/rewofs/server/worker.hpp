@@ -7,6 +7,7 @@
 #define WORKER_HPP__AJHLUD1B
 
 #include <thread>
+#include <unordered_map>
 
 #include "rewofs/disablewarnings.hpp"
 #include <boost/filesystem.hpp>
@@ -62,11 +63,23 @@ private:
     flatbuffers::Offset<messages::ResultErrno>
         process_chmod(flatbuffers::FlatBufferBuilder& fbb,
                         const messages::CommandChmod& msg);
+    flatbuffers::Offset<messages::ResultErrno>
+        process_open(flatbuffers::FlatBufferBuilder& fbb,
+                        const messages::CommandOpen& msg);
+    flatbuffers::Offset<messages::ResultRead>
+        process_read(flatbuffers::FlatBufferBuilder& fbb,
+                        const messages::CommandRead& msg);
+
+    /// @return -1 if not found
+    int get_file_descriptor(const uint64_t fh);
 
     Transport& m_transport;
     std::thread m_thread{};
     Distributor m_distributor{};
     boost::filesystem::path m_served_directory{};
+    std::mutex m_mutex{};
+    /// filehandle:file descriptor
+    std::unordered_map<uint64_t, int> m_opened_files{};
 };
 
 //==========================================================================

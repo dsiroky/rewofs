@@ -2,6 +2,8 @@
 ///
 /// @file
 
+#include <chrono>
+
 #include "rewofs/client/app.hpp"
 
 //==========================================================================
@@ -11,6 +13,10 @@ namespace rewofs::client {
 App::App(const boost::program_options::variables_map& options)
     : m_options{options}
 {
+    const auto seed = static_cast<uint64_t>(
+        std::chrono::steady_clock::now().time_since_epoch().count());
+    m_serializer.set_msgid_seed(seed);
+    m_remote_vfs.set_seed(seed);
 }
 
 //--------------------------------------------------------------------------

@@ -33,18 +33,6 @@ using MessageId
 
 //==========================================================================
 
-flatbuffers::Offset<messages::CommandStat>
-    make_command_stat(flatbuffers::FlatBufferBuilder& fbb, const std::string& path);
-flatbuffers::Offset<messages::CommandReaddir>
-    make_command_readdir(flatbuffers::FlatBufferBuilder& fbb, const std::string& path);
-flatbuffers::Offset<messages::CommandReadlink>
-    make_command_readlink(flatbuffers::FlatBufferBuilder& fbb, const std::string& path);
-flatbuffers::Offset<messages::CommandOpen>
-    make_command_open(flatbuffers::FlatBufferBuilder& fbb, const std::string& path,
-                      const int flags);
-flatbuffers::Offset<messages::CommandClose>
-    make_command_close(flatbuffers::FlatBufferBuilder& fbb, const std::string& path);
-
 template<typename _Msg>
 flatbuffers::Offset<messages::Frame> make_frame(flatbuffers::FlatBufferBuilder& fbb,
                                                 const uint64_t id,
@@ -69,8 +57,8 @@ public:
 
     static constexpr Priority PRIORITY_DEFAULT{10};
 
-    /// @param msgid_seed for message ID's
-    Serializer(const uint64_t msgid_seed);
+    /// @param seed for message ID's
+    void set_msgid_seed(const uint64_t seed);
 
     QueueRef new_queue(const Priority priority);
     template<typename _Command>

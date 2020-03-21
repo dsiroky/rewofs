@@ -18,11 +18,12 @@ union Message
     CommandSymlink,
     CommandRename,
     CommandChmod,
-
     CommandOpen,
+    CommandRead,
+    ResultRead,
+
     CommandClose,
-    ResultErrno,
-    ResultRead
+    ResultErrno
 }
 
 // Main transport frame.
