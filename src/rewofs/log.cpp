@@ -18,7 +18,7 @@ void log_init()
 {
     g_console = spdlog::stdout_color_mt("console");
 #ifdef NDEBUG
-    spdlog::set_level(spdlog::level::debug);
+    spdlog::set_level(spdlog::level::warn);
 #else
     spdlog::set_level(spdlog::level::trace);
 #endif
