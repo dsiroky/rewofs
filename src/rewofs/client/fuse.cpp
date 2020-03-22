@@ -68,10 +68,11 @@ static int readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     log_trace("path:{}", path);
     try
     {
-        g_vfs->readdir(path, [buf, filler](const fs::path& path, const struct stat& st) {
-            log_trace("{}", path.c_str());
-            filler(buf, path.c_str(), &st, 0);
-        });
+        g_vfs->readdir(path,
+                       [buf, filler](const fs::path& item_path, const struct stat& st) {
+                           log_trace("{}", item_path.c_str());
+                           filler(buf, item_path.c_str(), &st, 0);
+                       });
     }
     catch (...)
     {

@@ -167,7 +167,6 @@ env.AppendUnique(
         "#/src",
         "#$BUILD_DIR/src",
         "#/thirdparty/GSL/include",
-        "#/thirdparty/flatbuffers/include",
         "#/thirdparty/strong_type/include",
         ],
     CPPDEFINES=[
