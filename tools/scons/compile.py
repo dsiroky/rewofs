@@ -3,8 +3,6 @@
 Compilation support.
 """
 
-import SCons.Defaults
-
 #===========================================================================
 
 def WholeArchive(env, lib):

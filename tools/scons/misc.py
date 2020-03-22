@@ -6,23 +6,10 @@ Default stuff.
 import os
 import sys
 
-import SCons
-
 #==========================================================================
 
 def find_temp_dir(env):
-    if os.name == "nt":
-        tmp = os.environ.get("TMP")
-        if tmp is not None:
-            return tmp
-        else:
-            for d in ("c:\\tmp",):
-                if os.path.isdir(d):
-                    return d
-            else:
-                return "c:\\temp"
-    else:
-        return os.environ.get("TMP") or "/tmp"
+    return os.environ.get("TMP") or "/tmp"
 
 #--------------------------------------------------------------------------
 
