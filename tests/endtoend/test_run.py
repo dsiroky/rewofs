@@ -4,10 +4,11 @@ Test server run.
 """
 
 import os
-import unittest
-import threading
+import posix
 import tempfile
+import threading
 import time
+import unittest
 
 from subprocess import Popen
 
@@ -250,19 +251,22 @@ class TestBrowsing(TestClientServer):
 #===========================================================================
 
 class TestIO(TestClientServer):
-    def test_open(self):
+    def test_create_open_close(self):
         with open(self.source_dir + "/existing", "w"):
             pass
 
         self.run_client()
 
-        with self.assertRaises(OSError):
-            open(self.mount_dir + "/x", "r")
+        with self.assertRaises(FileNotFoundError):
+            posix.open(self.mount_dir + "/x", posix.O_RDONLY)
 
-        with open(self.mount_dir + "/x", "w"):
-            pass
-        with open(self.mount_dir + "/existing", "r"):
-            pass
+        f = posix.open(self.mount_dir + "/x", posix.O_WRONLY | posix.O_CREAT)
+        posix.close(f)
+        with self.assertRaises(OSError):
+            posix.close(f)
+
+        f = posix.open(self.mount_dir + "/x", posix.O_RDONLY)
+        posix.close(f)
 
         self.assertTrue(os.path.isfile(self.mount_dir + "/x"))
         self.assertTrue(os.path.isfile(self.source_dir + "/x"))
@@ -354,3 +358,52 @@ class TestIO(TestClientServer):
         with open(self.source_dir + "/f", "rb") as fr:
                 data = (b'\0' * 1000) + b"abc" + (b'\0' * (10000000 - 1000 - 3)) + b"123"
                 self.assertEqual(data, fr.read())
+
+    def test_mixed_read_write(self):
+        self.run_client()
+
+        with open(self.mount_dir + "/f", "w+b") as frw:
+            frw.seek(1000)
+            frw.write(b"abc")
+            frw.seek(950)
+            self.assertEqual(frw.read(100), b'\0' * 50 + b"abc")
+            frw.seek(2000)
+            frw.write(b"efg")
+
+        with open(self.source_dir + "/f", "rb") as fr:
+                data = (b'\0' * 1000) + b"abc" + (b'\0' * (1000 - 3)) + b"efg"
+                self.assertEqual(data, fr.read())
+
+    def test_truncate(self):
+        with open(self.source_dir + "/f", "wb") as fw:
+            fw.write(b"a" * 1024)
+
+        self.run_client()
+
+        posix.truncate(self.mount_dir + "/f", 100)
+
+        self.assertEqual(os.path.getsize(self.mount_dir + "/f"), 100)
+
+    def test_parallel_io(self):
+        self.run_client()
+
+        error_in_thread = [None]
+        def __run(idx):
+            fn = self.mount_dir + "/f" + str(idx)
+            try:
+                for i in range(1000):
+                    with open(fn, "wb") as fw:
+                        fw.write(b"a" * 1024)
+            except Exception as exc:
+                error_in_thread[0] = exc
+
+        threads = []
+        N = 10
+        for i in range(N):
+            threads.append(threading.Thread(target=__run, args=(i,)))
+            threads[-1].start()
+
+        for thr in threads:
+            thr.join()
+
+        self.assertIsNone(error_in_thread[0])

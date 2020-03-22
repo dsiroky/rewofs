@@ -64,8 +64,14 @@ private:
         process_chmod(flatbuffers::FlatBufferBuilder& fbb,
                         const messages::CommandChmod& msg);
     flatbuffers::Offset<messages::ResultErrno>
+        process_truncate(flatbuffers::FlatBufferBuilder& fbb,
+                        const messages::CommandTruncate& msg);
+    flatbuffers::Offset<messages::ResultErrno>
         process_open(flatbuffers::FlatBufferBuilder& fbb,
                         const messages::CommandOpen& msg);
+    flatbuffers::Offset<messages::ResultErrno>
+        process_close(flatbuffers::FlatBufferBuilder& fbb,
+                        const messages::CommandClose& msg);
     flatbuffers::Offset<messages::ResultRead>
         process_read(flatbuffers::FlatBufferBuilder& fbb,
                         const messages::CommandRead& msg);

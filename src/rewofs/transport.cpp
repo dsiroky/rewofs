@@ -108,11 +108,14 @@ void Distributor::process_frame(const gsl::span<const uint8_t> buf)
     };
 
     const auto& frame = *flatbuffers::GetRoot<messages::Frame>(buf.data());
+    log_trace("distributor got mid:{} msg:{}", frame.id(),
+              messages::MessageTypeTable()->names[static_cast<int>(frame.message_type())]);
     const auto it = m_subscriptions.find(frame.message_type());
     if (it != m_subscriptions.end())
     {
         it->second(buf);
     }
+    log_trace("distributor done mid:{}", frame.id());
 }
 
 //==========================================================================
@@ -131,6 +134,7 @@ void Deserializer::process_frame(const gsl::span<const uint8_t> raw_frame)
         return;
     };
     const auto& frame = *flatbuffers::GetRoot<messages::Frame>(raw_frame.data());
+    log_trace("deserializer got mid:{}", frame.id());
 
     std::unique_lock lg{m_mutex};
     m_items.emplace(std::make_pair(

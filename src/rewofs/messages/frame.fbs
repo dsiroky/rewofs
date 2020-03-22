@@ -18,13 +18,14 @@ union Message
     CommandSymlink,
     CommandRename,
     CommandChmod,
+    CommandTruncate,
     CommandOpen,
+    CommandClose,
     CommandRead,
     ResultRead,
     CommandWrite,
     ResultWrite,
 
-    CommandClose,
     ResultErrno
 }
 

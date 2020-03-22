@@ -268,6 +268,8 @@ Deserializer::Result<_Msg>
         };
 
     std::unique_lock lg{m_mutex};
+    log_trace("waiting for mid:{}", strong::value_of(mid));
+
     const auto until = std::chrono::steady_clock::now() + timeout;
     do {
         const auto it = m_items.find(mid);
@@ -286,6 +288,7 @@ Deserializer::Result<_Msg>
                         [this, mid]() { return m_items.find(mid) != m_items.end(); });
     } while (std::chrono::steady_clock::now() <= until);
 
+    log_trace("timeout mid:{}", strong::value_of(mid));
     return {};
 }
 

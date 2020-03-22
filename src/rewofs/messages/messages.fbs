@@ -90,6 +90,12 @@ table CommandChmod
     mode:uint32;
 }
 
+table CommandTruncate
+{
+    path:string;
+    lenght:uint64;
+}
+
 struct OpenParams
 {
   flags:int32;
@@ -103,6 +109,11 @@ table CommandOpen
   path:string;
   file_handle:uint64;
   params:OpenParams;
+}
+
+table CommandClose
+{
+  file_handle:uint64;
 }
 
 table CommandRead
@@ -130,11 +141,6 @@ table ResultWrite
 {
     res:int64;
     res_errno:int32;
-}
-
-table CommandClose
-{
-  path:string;
 }
 
 table ResultErrno

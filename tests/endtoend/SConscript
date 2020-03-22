@@ -7,10 +7,10 @@ endtoend_env = test_env.Clone()
 endtoend_env["E2E_DIR"] = Dir(".").srcnode()
 endtoend_env["NOSETESTS_CFG"] = File("nose.cfg").srcnode()
 endtoend_env["NOSETESTS_ARGS"] = nosetests_args
-endtoend_env["ENV"]["REWOFS_PROG"] = str(rewofs_prog)
+endtoend_env["REWOFS_PROG"] = str(rewofs_prog)
 
 e2e_prog = endtoend_env.Command("dummy", [],
-            "nose2-3 --config=$NOSETESTS_CFG --start-dir=\"$E2E_DIR\" $NOSETESTS_ARGS")
+            "REWOFS_PROG=$REWOFS_PROG nose2-3 --config=$NOSETESTS_CFG --start-dir=\"$E2E_DIR\" $NOSETESTS_ARGS")
 endtoend_env.Depends(e2e_prog, rewofs_prog)
 # do not execute E2E tests by default
 Ignore(".", e2e_prog)

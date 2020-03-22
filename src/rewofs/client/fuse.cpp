@@ -181,6 +181,24 @@ static int chmod(const char* path, const mode_t mode) noexcept
     return 0;
 }
 
+static int truncate(const char* path, const off_t length) noexcept
+{
+    log_trace("path:{}", path);
+    try
+    {
+        if (length < 0)
+        {
+            throw std::system_error{EINVAL, std::generic_category()};
+        }
+        g_vfs->truncate(path, length);
+    }
+    catch (...)
+    {
+        return gen_return_error_code();
+    }
+    return 0;
+}
+
 static int create(const char* path, mode_t mode, struct fuse_file_info* fi) noexcept
 {
     log_trace("path:{} mode:{:o}", path, mode);
@@ -203,6 +221,20 @@ static int open(const char* path, struct fuse_file_info *fi) noexcept
     {
         fi->fh = g_vfs->open(path, fi->flags);
         log_trace("handle:{}", fi->fh);
+    }
+    catch (...)
+    {
+        return gen_return_error_code();
+    }
+    return 0;
+}
+
+static int release(const char* path, struct fuse_file_info *fi) noexcept
+{
+    log_trace("path:{} handle:{}", path, fi->fh);
+    try
+    {
+        g_vfs->close(IVfs::FileHandle{fi->fh});
     }
     catch (...)
     {
@@ -261,12 +293,12 @@ Fuse::Fuse(IVfs& vfs)
     g_oper.symlink = callbacks::symlink;
     g_oper.rename = callbacks::rename;
     g_oper.chmod = callbacks::chmod;
+    g_oper.truncate = callbacks::truncate;
     g_oper.create = callbacks::create;
     g_oper.open = callbacks::open;
+    g_oper.release = callbacks::release;
     g_oper.read = callbacks::read;
     g_oper.write = callbacks::write;
-    //g_oper.truncate = callbacks::truncate;
-    //g_oper.release = callbacks::release;
 }
 
 //--------------------------------------------------------------------------

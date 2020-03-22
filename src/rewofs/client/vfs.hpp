@@ -43,8 +43,10 @@ public:
     virtual void rename(const Path& old_path, const Path& new_path)
         = 0;
     virtual void chmod(const Path& path, const mode_t mode) = 0;
+    virtual void truncate(const Path& path, const off_t lenght) = 0;
     virtual uint64_t open(const Path& path, const int flags, const mode_t mode) = 0;
     virtual uint64_t open(const Path& path, const int flags) = 0;
+    virtual void close(const FileHandle fh) = 0;
     virtual ssize_t read(const FileHandle fh, const gsl::span<uint8_t> output,
                          const off_t offset)
         = 0;
@@ -74,8 +76,10 @@ public:
     void symlink(const Path& target, const Path& link_path) override;
     void rename(const Path& old_path, const Path& new_path) override;
     void chmod(const Path& path, const mode_t mode) override;
+    void truncate(const Path& path, const off_t lenght) override;
     uint64_t open(const Path& path, const int flags, const mode_t mode) override;
     uint64_t open(const Path& path, const int flags) override;
+    void close(const FileHandle fh) override;
     ssize_t read(const FileHandle fh, const gsl::span<uint8_t> output,
                  const off_t offset) override;
     ssize_t write(const FileHandle fh, const gsl::span<const uint8_t> input,
@@ -97,19 +101,8 @@ private:
 
     uint64_t open_common(const Path& path, const int flags,
                          const std::optional<mode_t> mode);
-    std::pair<const uint64_t, messages::OpenParams> get_file_msg_params(const FileHandle fh)
-    {
-        const auto it = m_opened_files.find(fh);
-        if (it == m_opened_files.end())
-        {
-            throw std::system_error{EINVAL, std::generic_category()};
-        }
-        const auto& open_params = it->second.open_params;
-        const messages::OpenParams msg_open_params{open_params.flags,
-                                                   open_params.mode.has_value(),
-                                                   open_params.mode.value_or(0)};
-        return {strong::value_of(fh), msg_open_params};
-    }
+    std::pair<const uint64_t, messages::OpenParams>
+        get_file_msg_params(const FileHandle fh);
 
     template<typename _Result, typename _Command>
     Deserializer::Result<_Result>

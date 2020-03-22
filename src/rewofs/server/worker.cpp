@@ -58,7 +58,9 @@ Worker::Worker(server::Transport& transport)
     SUB(CommandSymlink, process_symlink);
     SUB(CommandRename, process_rename);
     SUB(CommandChmod, process_chmod);
+    SUB(CommandTruncate, process_truncate);
     SUB(CommandOpen, process_open);
+    SUB(CommandClose, process_close);
     SUB(CommandRead, process_read);
     SUB(CommandWrite, process_write);
 }
@@ -109,6 +111,7 @@ void Worker::process_message(const MessageId mid, const _Msg& msg, _ProcFunc pro
     const auto res = (this->*proc)(fbb, msg);
     const auto frame = make_frame(fbb, strong::value_of(mid), res);
     fbb.Finish(frame);
+    log_trace("reply mid:{}", strong::value_of(mid));
     m_transport.send({fbb.GetBufferPointer(), fbb.GetSize()});
 }
 
@@ -325,6 +328,25 @@ flatbuffers::Offset<messages::ResultErrno>
 //--------------------------------------------------------------------------
 
 flatbuffers::Offset<messages::ResultErrno>
+    Worker::process_truncate(flatbuffers::FlatBufferBuilder& fbb,
+                             const messages::CommandTruncate& msg)
+{
+    const auto path = map_path(msg.path()->c_str());
+
+    const auto res = truncate(path.c_str(), static_cast<off_t>(msg.lenght()));
+    log_trace("{} res:{}", path.native(), res);
+
+    if (res < 0)
+    {
+        return messages::CreateResultErrno(fbb, errno);
+    }
+
+    return messages::CreateResultErrno(fbb, 0);
+}
+
+//--------------------------------------------------------------------------
+
+flatbuffers::Offset<messages::ResultErrno>
     Worker::process_open(flatbuffers::FlatBufferBuilder& fbb,
                           const messages::CommandOpen& msg)
 {
@@ -362,6 +384,24 @@ int Worker::get_file_descriptor(const uint64_t fh)
         return -1;
     }
     return it->second;
+}
+
+//--------------------------------------------------------------------------
+
+flatbuffers::Offset<messages::ResultErrno>
+    Worker::process_close(flatbuffers::FlatBufferBuilder& fbb,
+                          const messages::CommandClose& msg)
+{
+    const auto fd = get_file_descriptor(msg.file_handle());
+    const auto res = close(fd);
+    log_trace("fd:{} res:{}", fd, res);
+
+    if (res < 0)
+    {
+        return messages::CreateResultErrno(fbb, errno);
+    }
+
+    return messages::CreateResultErrno(fbb, 0);
 }
 
 //--------------------------------------------------------------------------

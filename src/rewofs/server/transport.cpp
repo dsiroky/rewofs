@@ -54,7 +54,6 @@ void Transport::send(const gsl::span<const uint8_t> buf)
 void Transport::recv(const std::function<void(const gsl::span<const uint8_t>)> cb)
 {
     nanomsg::receive(m_socket, [cb](const gsl::span<const uint8_t> buf) {
-        log_trace("got msg {} bytes", buf.size());
         cb(buf);
     });
 }

@@ -203,6 +203,27 @@ void RemoteVfs::chmod(const Path& path, const mode_t mode)
 
 //--------------------------------------------------------------------------
 
+void RemoteVfs::truncate(const Path& path, const off_t lenght)
+{
+    if (lenght < 0)
+    {
+        throw std::system_error{EINVAL, std::generic_category()};
+    }
+
+    flatbuffers::FlatBufferBuilder fbb{};
+    const auto command = messages::CreateCommandTruncateDirect(
+        fbb, path.c_str(), static_cast<uint64_t>(lenght));
+    const auto res = single_command<messages::ResultErrno>(fbb, command);
+
+    const auto& message = res.message();
+    if (message.res_errno() != 0)
+    {
+        throw std::system_error{message.res_errno(), std::generic_category()};
+    }
+}
+
+//--------------------------------------------------------------------------
+
 uint64_t RemoteVfs::open_common(const Path& path, const int flags,
                                 const std::optional<mode_t> mode)
 {
@@ -230,6 +251,22 @@ uint64_t RemoteVfs::open_common(const Path& path, const int flags,
 
 //--------------------------------------------------------------------------
 
+std::pair<const uint64_t, messages::OpenParams>
+    RemoteVfs::get_file_msg_params(const FileHandle fh)
+{
+    const auto it = m_opened_files.find(fh);
+    if (it == m_opened_files.end())
+    {
+        throw std::system_error{EINVAL, std::generic_category()};
+    }
+    const auto& open_params = it->second.open_params;
+    const messages::OpenParams msg_open_params{
+        open_params.flags, open_params.mode.has_value(), open_params.mode.value_or(0)};
+    return {strong::value_of(fh), msg_open_params};
+}
+
+//--------------------------------------------------------------------------
+
 uint64_t RemoteVfs::open(const Path& path, const int flags, const mode_t mode)
 {
     return open_common(path, flags, mode);
@@ -240,6 +277,28 @@ uint64_t RemoteVfs::open(const Path& path, const int flags, const mode_t mode)
 uint64_t RemoteVfs::open(const Path& path, const int flags)
 {
     return open_common(path, flags, std::nullopt);
+}
+
+//--------------------------------------------------------------------------
+
+void RemoteVfs::close(const FileHandle fh)
+{
+    std::lock_guard lg{m_mutex};
+    const auto it = m_opened_files.find(fh);
+    if (it == m_opened_files.end())
+    {
+        throw std::system_error{EINVAL, std::generic_category()};
+    }
+
+    flatbuffers::FlatBufferBuilder fbb{};
+    const auto command = messages::CreateCommandClose(fbb, strong::value_of(fh));
+    const auto res = single_command<messages::ResultErrno>(fbb, command);
+
+    const auto& message = res.message();
+    if (message.res_errno() != 0)
+    {
+        throw std::system_error{message.res_errno(), std::generic_category()};
+    }
 }
 
 //--------------------------------------------------------------------------
