@@ -17,7 +17,7 @@ enum class LogLevel
   TRACE, DEBUG, INFO, WARNING, ERROR, CRITICAL
 };
 
-void log_init();
+void log_init(const std::string& prefix);
 
 /// spdlog takes incredible amount of time to compile. These are speedup
 /// wrappers.

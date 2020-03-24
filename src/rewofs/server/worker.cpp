@@ -353,24 +353,27 @@ flatbuffers::Offset<messages::ResultErrno>
     const auto path = map_path(msg.path()->c_str());
 
     int res{-1};
-    if (msg.params()->set_mode())
+    if (flatbuffers::IsFieldPresent(&msg, messages::CommandOpen::VT_MODE))
     {
-        res = open(path.c_str(), msg.params()->flags(), msg.params()->mode());
+        res = open(path.c_str(), msg.flags(), msg.mode());
     }
     else
     {
-        res = open(path.c_str(), msg.params()->flags());
+        res = open(path.c_str(), msg.flags());
     }
-    log_trace("{} fd:{}", path.native(), res);
+    log_trace("{} fh:{} fd:{}", path.native(), msg.file_handle(), res);
 
     if (res < 0)
     {
         return messages::CreateResultErrno(fbb, errno);
     }
 
-    std::lock_guard lg{m_mutex};
-    assert(m_opened_files.find(msg.file_handle()) == m_opened_files.end());
-    m_opened_files.emplace(std::make_pair(msg.file_handle(), res));
+    {
+        std::lock_guard lg{m_mutex};
+        assert(m_opened_files.find(msg.file_handle()) == m_opened_files.end());
+        m_opened_files.emplace(std::make_pair(msg.file_handle(), res));
+    }
+    assert(get_file_descriptor(msg.file_handle()) == res);
     return messages::CreateResultErrno(fbb, 0);
 }
 
@@ -378,6 +381,7 @@ flatbuffers::Offset<messages::ResultErrno>
 
 int Worker::get_file_descriptor(const uint64_t fh)
 {
+    std::lock_guard lg{m_mutex};
     const auto it = m_opened_files.find(fh);
     if (it == m_opened_files.end())
     {
@@ -393,6 +397,7 @@ flatbuffers::Offset<messages::ResultErrno>
                           const messages::CommandClose& msg)
 {
     const auto fd = get_file_descriptor(msg.file_handle());
+
     const auto res = close(fd);
     log_trace("fd:{} res:{}", fd, res);
 
@@ -401,6 +406,7 @@ flatbuffers::Offset<messages::ResultErrno>
         return messages::CreateResultErrno(fbb, errno);
     }
 
+    m_opened_files.erase(m_opened_files.find(msg.file_handle()));
     return messages::CreateResultErrno(fbb, 0);
 }
 

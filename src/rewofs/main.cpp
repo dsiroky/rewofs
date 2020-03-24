@@ -14,8 +14,6 @@ int main(int argc, char *argv[])
 {
     namespace po = boost::program_options;
 
-    rewofs::log_init();
-
     try
     {
         po::options_description conf_generic{"Generic options"};
@@ -50,11 +48,13 @@ int main(int argc, char *argv[])
 
         if (vm.count("serve") > 0)
         {
+            rewofs::log_init("srv");
             log_info("starting server");
             std::make_unique<rewofs::server::App>(vm)->run();
         }
         else
         {
+            rewofs::log_init("cli");
             log_info("starting client");
             std::make_unique<rewofs::client::App>(vm)->run();
         }

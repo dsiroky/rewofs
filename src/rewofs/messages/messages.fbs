@@ -96,19 +96,14 @@ table CommandTruncate
     lenght:uint64;
 }
 
-struct OpenParams
-{
-  flags:int32;
-  /// true means use a mode value
-  set_mode:bool;
-  mode:uint32;
-}
-
 table CommandOpen
 {
   path:string;
   file_handle:uint64;
-  params:OpenParams;
+  flags:int32;
+  /// true means use a mode value
+  set_mode:bool;
+  mode:uint32;
 }
 
 table CommandClose
@@ -121,7 +116,6 @@ table CommandRead
   file_handle:uint64;
   offset:int64;
   size:uint64;
-  open_params:OpenParams;
 }
 table ResultRead
 {
@@ -135,7 +129,6 @@ table CommandWrite
   file_handle:uint64;
   offset:int64;
   data:[ubyte];
-  open_params:OpenParams;
 }
 table ResultWrite
 {

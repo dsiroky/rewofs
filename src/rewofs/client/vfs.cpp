@@ -229,10 +229,16 @@ uint64_t RemoteVfs::open_common(const Path& path, const int flags,
 {
     flatbuffers::FlatBufferBuilder fbb{};
     const auto new_open_id = m_open_id_dispenser++;
-    const messages::OpenParams open_params{flags, mode.has_value(), mode.value_or(0)};
-    const auto command = messages::CreateCommandOpenDirect(
-        fbb, path.c_str(), strong::value_of(new_open_id), &open_params);
-    const auto res = single_command<messages::ResultErrno>(fbb, command);
+    const auto msg_path = fbb.CreateString(path.native());
+    messages::CommandOpenBuilder cmd_bld{fbb};
+    cmd_bld.add_path(msg_path);
+    cmd_bld.add_file_handle(new_open_id);
+    cmd_bld.add_flags(flags);
+    if (mode.has_value())
+    {
+        cmd_bld.add_mode(*mode);
+    }
+    const auto res = single_command<messages::ResultErrno>(fbb, cmd_bld.Finish());
 
     const auto& message = res.message();
     if (message.res_errno() != 0)
@@ -243,26 +249,9 @@ uint64_t RemoteVfs::open_common(const Path& path, const int flags,
     std::lock_guard lg{m_mutex};
     FileParams fparams{};
     fparams.path = path;
-    fparams.open_params.flags = flags;
-    fparams.open_params.mode = mode;
     m_opened_files.emplace(std::make_pair(FileHandle{new_open_id}, fparams));
+    log_trace("open fh:{} '{}'", new_open_id, path.native());
     return new_open_id;
-}
-
-//--------------------------------------------------------------------------
-
-std::pair<const uint64_t, messages::OpenParams>
-    RemoteVfs::get_file_msg_params(const FileHandle fh)
-{
-    const auto it = m_opened_files.find(fh);
-    if (it == m_opened_files.end())
-    {
-        throw std::system_error{EINVAL, std::generic_category()};
-    }
-    const auto& open_params = it->second.open_params;
-    const messages::OpenParams msg_open_params{
-        open_params.flags, open_params.mode.has_value(), open_params.mode.value_or(0)};
-    return {strong::value_of(fh), msg_open_params};
 }
 
 //--------------------------------------------------------------------------
@@ -307,11 +296,10 @@ ssize_t RemoteVfs::read(const FileHandle fh, const gsl::span<uint8_t> output,
                         const off_t offset)
 {
     std::lock_guard lg{m_mutex};
-    auto [raw_fh, msg_open_params] = get_file_msg_params(fh);
 
     flatbuffers::FlatBufferBuilder fbb{};
-    const auto command = messages::CreateCommandRead(fbb, raw_fh, offset, output.size(),
-                                                     &msg_open_params);
+    const auto command
+        = messages::CreateCommandRead(fbb, strong::value_of(fh), offset, output.size());
     const auto res = single_command<messages::ResultRead>(fbb, command);
 
     const auto& message = res.message();
@@ -330,12 +318,11 @@ ssize_t RemoteVfs::write(const FileHandle fh, const gsl::span<const uint8_t> inp
                          const off_t offset)
 {
     std::lock_guard lg{m_mutex};
-    auto [raw_fh, msg_open_params] = get_file_msg_params(fh);
 
     flatbuffers::FlatBufferBuilder fbb{};
     const auto data = fbb.CreateVector(input.data(), input.size());
     const auto command
-        = messages::CreateCommandWrite(fbb, raw_fh, offset, data, &msg_open_params);
+        = messages::CreateCommandWrite(fbb, strong::value_of(fh), offset, data);
     const auto res = single_command<messages::ResultWrite>(fbb, command);
 
     const auto& message = res.message();

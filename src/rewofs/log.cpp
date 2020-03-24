@@ -14,7 +14,7 @@ static std::shared_ptr<spdlog::logger> g_console{};
 
 //==========================================================================
 
-void log_init()
+void log_init(const std::string& prefix)
 {
     g_console = spdlog::stdout_color_mt("console");
 #ifdef NDEBUG
@@ -22,7 +22,7 @@ void log_init()
 #else
     spdlog::set_level(spdlog::level::trace);
 #endif
-    g_console->set_pattern("[%H:%M:%S.%e %L] %v");
+    g_console->set_pattern(prefix + " [%H:%M:%S.%e %L] %v");
 }
 
 //--------------------------------------------------------------------------

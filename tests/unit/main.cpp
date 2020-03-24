@@ -14,7 +14,7 @@
 
 int main(int argc, char **argv)
 {
-    rewofs::log_init();
+    rewofs::log_init("test");
     testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }

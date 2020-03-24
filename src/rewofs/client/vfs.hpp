@@ -92,17 +92,10 @@ private:
     struct FileParams
     {
         Path path{};
-        struct
-        {
-            int32_t flags{};
-            std::optional<uint32_t> mode{};
-        } open_params{};
     };
 
     uint64_t open_common(const Path& path, const int flags,
                          const std::optional<mode_t> mode);
-    std::pair<const uint64_t, messages::OpenParams>
-        get_file_msg_params(const FileHandle fh);
 
     template<typename _Result, typename _Command>
     Deserializer::Result<_Result>
