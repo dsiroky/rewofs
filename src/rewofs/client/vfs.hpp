@@ -47,11 +47,11 @@ public:
     virtual uint64_t open(const Path& path, const int flags, const mode_t mode) = 0;
     virtual uint64_t open(const Path& path, const int flags) = 0;
     virtual void close(const FileHandle fh) = 0;
-    virtual ssize_t read(const FileHandle fh, const gsl::span<uint8_t> output,
-                         const off_t offset)
+    virtual size_t read(const FileHandle fh, const gsl::span<uint8_t> output,
+                        const off_t offset)
         = 0;
-    virtual ssize_t write(const FileHandle fh, const gsl::span<const uint8_t> input,
-                          const off_t offset)
+    virtual size_t write(const FileHandle fh, const gsl::span<const uint8_t> input,
+                         const off_t offset)
         = 0;
 
 private:
@@ -80,14 +80,16 @@ public:
     uint64_t open(const Path& path, const int flags, const mode_t mode) override;
     uint64_t open(const Path& path, const int flags) override;
     void close(const FileHandle fh) override;
-    ssize_t read(const FileHandle fh, const gsl::span<uint8_t> output,
-                 const off_t offset) override;
-    ssize_t write(const FileHandle fh, const gsl::span<const uint8_t> input,
+    size_t read(const FileHandle fh, const gsl::span<uint8_t> output,
+                const off_t offset) override;
+    size_t write(const FileHandle fh, const gsl::span<const uint8_t> input,
                  const off_t offset) override;
 
     //--------------------------------
 private:
     static constexpr std::chrono::seconds TIMEOUT{5};
+    // fragment reads/writes to improve remote response
+    static constexpr size_t IO_FRAGMENT_SIZE{1024 * 32};
 
     struct FileParams
     {

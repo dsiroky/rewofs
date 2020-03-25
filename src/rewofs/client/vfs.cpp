@@ -292,46 +292,98 @@ void RemoteVfs::close(const FileHandle fh)
 
 //--------------------------------------------------------------------------
 
-ssize_t RemoteVfs::read(const FileHandle fh, const gsl::span<uint8_t> output,
-                        const off_t offset)
+size_t RemoteVfs::read(const FileHandle fh, const gsl::span<uint8_t> output,
+                       const off_t offset)
 {
     std::lock_guard lg{m_mutex};
 
-    flatbuffers::FlatBufferBuilder fbb{};
-    const auto command
-        = messages::CreateCommandRead(fbb, strong::value_of(fh), offset, output.size());
-    const auto res = single_command<messages::ResultRead>(fbb, command);
+    auto queue = m_serializer.new_queue(Serializer::PRIORITY_DEFAULT);
+    std::vector<MessageId> mids{};
 
-    const auto& message = res.message();
-    if (message.res() < 0)
+    // queue chunks to improve responses over slow lines
+    size_t block_ofs{0};
+    mids.reserve(output.size() / IO_FRAGMENT_SIZE + 1);
+    while (block_ofs < output.size())
     {
-        throw std::system_error{message.res_errno(), std::generic_category()};
+        const size_t block_size{std::min(output.size() - block_ofs, IO_FRAGMENT_SIZE)};
+
+        flatbuffers::FlatBufferBuilder fbb{};
+        const auto command = messages::CreateCommandRead(
+            fbb, strong::value_of(fh), static_cast<size_t>(offset) + block_ofs,
+            block_size);
+        mids.emplace_back(m_serializer.add_command(queue, fbb, command));
+        log_trace("mid:{}", strong::value_of(mids.back()));
+        block_ofs += block_size;
     }
 
-    std::copy(message.data()->begin(), message.data()->end(), output.begin());
-    return message.data()->size();
+    size_t read_size{0};
+    for (const auto mid: mids)
+    {
+        const auto res
+            = m_deserializer.wait_for_result<messages::ResultRead>(mid, TIMEOUT);
+        if (not res.is_valid())
+        {
+            throw std::system_error{EHOSTUNREACH, std::generic_category()};
+        }
+        const auto& message = res.message();
+        if (message.res() < 0)
+        {
+            throw std::system_error{message.res_errno(), std::generic_category()};
+        }
+
+        std::copy(message.data()->begin(), message.data()->end(),
+                  output.begin() + static_cast<ssize_t>(read_size));
+        read_size += message.data()->size();
+    }
+
+    return read_size;
 }
 
 //--------------------------------------------------------------------------
 
-ssize_t RemoteVfs::write(const FileHandle fh, const gsl::span<const uint8_t> input,
-                         const off_t offset)
+size_t RemoteVfs::write(const FileHandle fh, const gsl::span<const uint8_t> input,
+                        const off_t offset)
 {
     std::lock_guard lg{m_mutex};
 
-    flatbuffers::FlatBufferBuilder fbb{};
-    const auto data = fbb.CreateVector(input.data(), input.size());
-    const auto command
-        = messages::CreateCommandWrite(fbb, strong::value_of(fh), offset, data);
-    const auto res = single_command<messages::ResultWrite>(fbb, command);
+    auto queue = m_serializer.new_queue(Serializer::PRIORITY_DEFAULT);
+    std::vector<MessageId> mids{};
 
-    const auto& message = res.message();
-    if (message.res() < 0)
+    // queue chunks to improve responses over slow lines
+    size_t block_ofs{0};
+    mids.reserve(input.size() / IO_FRAGMENT_SIZE + 1);
+    while (block_ofs < input.size())
     {
-        throw std::system_error{message.res_errno(), std::generic_category()};
+        const size_t block_size{std::min(input.size() - block_ofs, IO_FRAGMENT_SIZE)};
+
+        flatbuffers::FlatBufferBuilder fbb{};
+        const auto data = fbb.CreateVector(input.data(), input.size());
+        const auto command
+            = messages::CreateCommandWrite(fbb, strong::value_of(fh), offset, data);
+        mids.emplace_back(m_serializer.add_command(queue, fbb, command));
+        log_trace("mid:{}", strong::value_of(mids.back()));
+        block_ofs += block_size;
     }
 
-    return message.res();
+    size_t write_size{0};
+    for (const auto mid: mids)
+    {
+        const auto res
+            = m_deserializer.wait_for_result<messages::ResultWrite>(mid, TIMEOUT);
+        if (not res.is_valid())
+        {
+            throw std::system_error{EHOSTUNREACH, std::generic_category()};
+        }
+        const auto& message = res.message();
+        if (message.res() < 0)
+        {
+            throw std::system_error{message.res_errno(), std::generic_category()};
+        }
+
+        write_size += static_cast<size_t>(message.res());
+    }
+
+    return write_size;
 }
 
 //==========================================================================

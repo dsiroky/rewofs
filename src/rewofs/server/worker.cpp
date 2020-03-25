@@ -418,8 +418,8 @@ flatbuffers::Offset<messages::ResultRead>
 {
     const auto fd = get_file_descriptor(msg.file_handle());
 
-    const auto new_ofs = lseek(fd, msg.offset(), SEEK_SET);
-    if (new_ofs != msg.offset())
+    const auto new_ofs = lseek(fd, static_cast<off_t>(msg.offset()), SEEK_SET);
+    if (new_ofs != static_cast<off_t>(msg.offset()))
     {
         return messages::CreateResultReadDirect(fbb, -1, EIO);
     }

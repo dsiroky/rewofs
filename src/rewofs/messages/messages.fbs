@@ -114,7 +114,7 @@ table CommandClose
 table CommandRead
 {
   file_handle:uint64;
-  offset:int64;
+  offset:uint64;
   size:uint64;
 }
 table ResultRead
