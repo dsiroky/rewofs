@@ -6,6 +6,11 @@ namespace rewofs.messages;
 
 union Message
 {
+    Ping,
+    Pong,
+
+    CommandReadTree,
+    ResultReadTree,
     CommandStat,
     ResultStat,
     CommandReaddir,

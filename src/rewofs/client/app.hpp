@@ -12,8 +12,9 @@
 #include "rewofs/enablewarnings.hpp"
 
 #include "rewofs/client/fuse.hpp"
-#include "rewofs/client/vfs.hpp"
+#include "rewofs/client/heartbeat.hpp"
 #include "rewofs/client/transport.hpp"
+#include "rewofs/client/vfs.hpp"
 
 //==========================================================================
 
@@ -33,7 +34,9 @@ private:
     Deserializer m_deserializer{};
     client::Transport m_transport{m_serializer, m_deserializer};
     RemoteVfs m_remote_vfs{m_serializer, m_deserializer};
-    Fuse m_fuse{m_remote_vfs};
+    CachedVfs m_cached_vfs{m_remote_vfs, m_serializer, m_deserializer};
+    Heartbeat m_heartbeat{m_serializer, m_deserializer, m_cached_vfs};
+    Fuse m_fuse{m_cached_vfs};
 };
 
 } // namespace rewofs::client

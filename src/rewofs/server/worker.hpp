@@ -36,6 +36,12 @@ private:
 
     template<typename _Msg, typename _ProcFunc>
     void process_message(const MessageId mid, const _Msg& msg, _ProcFunc proc);
+    flatbuffers::Offset<messages::Pong>
+        process_ping(flatbuffers::FlatBufferBuilder& fbb,
+                     const messages::Ping&);
+    flatbuffers::Offset<messages::ResultReadTree>
+        process_read_tree(flatbuffers::FlatBufferBuilder& fbb,
+                     const messages::CommandReadTree& msg);
     flatbuffers::Offset<messages::ResultStat>
         process_stat(flatbuffers::FlatBufferBuilder& fbb,
                      const messages::CommandStat& msg);

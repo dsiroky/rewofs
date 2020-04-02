@@ -19,6 +19,8 @@ void copy(const messages::Time& src, timespec& dst)
     dst.tv_sec = src.sec();
 }
 
+//--------------------------------------------------------------------------
+
 void copy(const messages::Stat& src, struct stat& dst)
 {
     dst.st_mode = src.st_mode();
@@ -52,7 +54,7 @@ void RemoteVfs::getattr(const Path& path, struct stat& st)
 {
     flatbuffers::FlatBufferBuilder fbb{};
     const auto command = messages::CreateCommandStatDirect(fbb, path.c_str());
-    const auto res = single_command<messages::ResultStat>(fbb, command);
+    const auto res = m_comm.single_command<messages::ResultStat>(fbb, command);
 
     const auto& message = res.message();
     if (message.res_errno() != 0)
@@ -69,7 +71,7 @@ void RemoteVfs::readdir(const Path& path, const DirFiller& filler)
 {
     flatbuffers::FlatBufferBuilder fbb{};
     const auto command = messages::CreateCommandReaddirDirect(fbb, path.c_str());
-    const auto res = single_command<messages::ResultReaddir>(fbb, command);
+    const auto res = m_comm.single_command<messages::ResultReaddir>(fbb, command);
 
     const auto& message = res.message();
     if (message.res_errno() != 0)
@@ -81,24 +83,24 @@ void RemoteVfs::readdir(const Path& path, const DirFiller& filler)
     {
         if (item->st() == nullptr)
         {
-            filler(item->path()->str(), {});
+            filler(item->name()->str(), {});
         }
         else
         {
             struct stat st{};
             copy(*item->st(), st);
-            filler(item->path()->str(), st);
+            filler(item->name()->str(), st);
         }
     }
 }
 
 //--------------------------------------------------------------------------
 
-std::string RemoteVfs::readlink(const Path& path)
+IVfs::Path RemoteVfs::readlink(const Path& path)
 {
     flatbuffers::FlatBufferBuilder fbb{};
     const auto command = messages::CreateCommandReadlinkDirect(fbb, path.c_str());
-    const auto res = single_command<messages::ResultReadlink>(fbb, command);
+    const auto res = m_comm.single_command<messages::ResultReadlink>(fbb, command);
 
     const auto& message = res.message();
     if (message.res_errno() != 0)
@@ -106,7 +108,7 @@ std::string RemoteVfs::readlink(const Path& path)
         throw std::system_error{message.res_errno(), std::generic_category()};
     }
 
-    return message.path()->str();
+    return message.path()->c_str();
 }
 
 //--------------------------------------------------------------------------
@@ -115,7 +117,7 @@ void RemoteVfs::mkdir(const Path& path, mode_t mode)
 {
     flatbuffers::FlatBufferBuilder fbb{};
     const auto command = messages::CreateCommandMkdirDirect(fbb, path.c_str(), mode);
-    const auto res = single_command<messages::ResultErrno>(fbb, command);
+    const auto res = m_comm.single_command<messages::ResultErrno>(fbb, command);
 
     const auto& message = res.message();
     if (message.res_errno() != 0)
@@ -130,7 +132,7 @@ void RemoteVfs::rmdir(const Path& path)
 {
     flatbuffers::FlatBufferBuilder fbb{};
     const auto command = messages::CreateCommandRmdirDirect(fbb, path.c_str());
-    const auto res = single_command<messages::ResultErrno>(fbb, command);
+    const auto res = m_comm.single_command<messages::ResultErrno>(fbb, command);
 
     const auto& message = res.message();
     if (message.res_errno() != 0)
@@ -145,7 +147,7 @@ void RemoteVfs::unlink(const Path& path)
 {
     flatbuffers::FlatBufferBuilder fbb{};
     const auto command = messages::CreateCommandUnlinkDirect(fbb, path.c_str());
-    const auto res = single_command<messages::ResultErrno>(fbb, command);
+    const auto res = m_comm.single_command<messages::ResultErrno>(fbb, command);
 
     const auto& message = res.message();
     if (message.res_errno() != 0)
@@ -161,7 +163,7 @@ void RemoteVfs::symlink(const Path& target, const Path& link_path)
     flatbuffers::FlatBufferBuilder fbb{};
     const auto command
         = messages::CreateCommandSymlinkDirect(fbb, link_path.c_str(), target.c_str());
-    const auto res = single_command<messages::ResultErrno>(fbb, command);
+    const auto res = m_comm.single_command<messages::ResultErrno>(fbb, command);
 
     const auto& message = res.message();
     if (message.res_errno() != 0)
@@ -177,7 +179,7 @@ void RemoteVfs::rename(const Path& old_path, const Path& new_path)
     flatbuffers::FlatBufferBuilder fbb{};
     const auto command = messages::CreateCommandRenameDirect(fbb, old_path.c_str(),
                                                              new_path.c_str());
-    const auto res = single_command<messages::ResultErrno>(fbb, command);
+    const auto res = m_comm.single_command<messages::ResultErrno>(fbb, command);
 
     const auto& message = res.message();
     if (message.res_errno() != 0)
@@ -192,7 +194,7 @@ void RemoteVfs::chmod(const Path& path, const mode_t mode)
 {
     flatbuffers::FlatBufferBuilder fbb{};
     const auto command = messages::CreateCommandChmodDirect(fbb, path.c_str(), mode);
-    const auto res = single_command<messages::ResultErrno>(fbb, command);
+    const auto res = m_comm.single_command<messages::ResultErrno>(fbb, command);
 
     const auto& message = res.message();
     if (message.res_errno() != 0)
@@ -203,17 +205,17 @@ void RemoteVfs::chmod(const Path& path, const mode_t mode)
 
 //--------------------------------------------------------------------------
 
-void RemoteVfs::truncate(const Path& path, const off_t lenght)
+void RemoteVfs::truncate(const Path& path, const off_t length)
 {
-    if (lenght < 0)
+    if (length < 0)
     {
         throw std::system_error{EINVAL, std::generic_category()};
     }
 
     flatbuffers::FlatBufferBuilder fbb{};
     const auto command = messages::CreateCommandTruncateDirect(
-        fbb, path.c_str(), static_cast<uint64_t>(lenght));
-    const auto res = single_command<messages::ResultErrno>(fbb, command);
+        fbb, path.c_str(), static_cast<uint64_t>(length));
+    const auto res = m_comm.single_command<messages::ResultErrno>(fbb, command);
 
     const auto& message = res.message();
     if (message.res_errno() != 0)
@@ -224,8 +226,8 @@ void RemoteVfs::truncate(const Path& path, const off_t lenght)
 
 //--------------------------------------------------------------------------
 
-uint64_t RemoteVfs::open_common(const Path& path, const int flags,
-                                const std::optional<mode_t> mode)
+IVfs::FileHandle RemoteVfs::open_common(const Path& path, const int flags,
+                                        const std::optional<mode_t> mode)
 {
     flatbuffers::FlatBufferBuilder fbb{};
     const auto new_open_id = m_open_id_dispenser++;
@@ -238,7 +240,7 @@ uint64_t RemoteVfs::open_common(const Path& path, const int flags,
     {
         cmd_bld.add_mode(*mode);
     }
-    const auto res = single_command<messages::ResultErrno>(fbb, cmd_bld.Finish());
+    const auto res = m_comm.single_command<messages::ResultErrno>(fbb, cmd_bld.Finish());
 
     const auto& message = res.message();
     if (message.res_errno() != 0)
@@ -251,19 +253,19 @@ uint64_t RemoteVfs::open_common(const Path& path, const int flags,
     fparams.path = path;
     m_opened_files.emplace(std::make_pair(FileHandle{new_open_id}, fparams));
     log_trace("open fh:{} '{}'", new_open_id, path.native());
-    return new_open_id;
+    return FileHandle{new_open_id};
 }
 
 //--------------------------------------------------------------------------
 
-uint64_t RemoteVfs::open(const Path& path, const int flags, const mode_t mode)
+IVfs::FileHandle RemoteVfs::open(const Path& path, const int flags, const mode_t mode)
 {
     return open_common(path, flags, mode);
 }
 
 //--------------------------------------------------------------------------
 
-uint64_t RemoteVfs::open(const Path& path, const int flags)
+IVfs::FileHandle RemoteVfs::open(const Path& path, const int flags)
 {
     return open_common(path, flags, std::nullopt);
 }
@@ -281,7 +283,7 @@ void RemoteVfs::close(const FileHandle fh)
 
     flatbuffers::FlatBufferBuilder fbb{};
     const auto command = messages::CreateCommandClose(fbb, strong::value_of(fh));
-    const auto res = single_command<messages::ResultErrno>(fbb, command);
+    const auto res = m_comm.single_command<messages::ResultErrno>(fbb, command);
 
     const auto& message = res.message();
     if (message.res_errno() != 0)
@@ -384,6 +386,176 @@ size_t RemoteVfs::write(const FileHandle fh, const gsl::span<const uint8_t> inpu
     }
 
     return write_size;
+}
+
+//==========================================================================
+
+CachedVfs::CachedVfs(IVfs& subvfs, Serializer& serializer, Deserializer& deserializer)
+    : m_subvfs{subvfs}
+    , m_serializer{serializer}
+    , m_deserializer{deserializer}
+{
+}
+
+//--------------------------------------------------------------------------
+
+void CachedVfs::populate_tree()
+{
+    log_info("populating tree");
+
+    flatbuffers::FlatBufferBuilder fbb{};
+    const auto command = messages::CreateCommandReadTreeDirect(fbb, "/");
+    const auto res = m_comm.single_command<messages::ResultReadTree>(fbb, command);
+
+    const auto& message = res.message();
+    if (message.res_errno() != 0)
+    {
+        throw std::system_error{message.res_errno(), std::generic_category()};
+    }
+
+    std::lock_guard lg{m_tree_mutex};
+    populate_tree(m_tree.raw_get_root(), *message.tree());
+}
+
+//--------------------------------------------------------------------------
+
+void CachedVfs::populate_tree(cache::Node& node, const messages::TreeNode& fbb_node)
+{
+    node.name = fbb_node.name()->str();
+    copy(*fbb_node.st(), node.st);
+    for (const auto& child: *fbb_node.children())
+    {
+        auto& new_child = m_tree.raw_make_node(node, child->name()->str());
+        populate_tree(new_child, *child);
+    }
+}
+
+//--------------------------------------------------------------------------
+
+void CachedVfs::getattr(const Path& path, struct stat& st)
+{
+    std::lock_guard lg{m_tree_mutex};
+    st = m_tree.lstat(path);
+}
+
+//--------------------------------------------------------------------------
+
+void CachedVfs::readdir(const Path& path, const DirFiller& filler)
+{
+    m_subvfs.readdir(path, filler);
+}
+
+//--------------------------------------------------------------------------
+
+IVfs::Path CachedVfs::readlink(const Path& path)
+{
+    return m_subvfs.readlink(path);
+}
+
+//--------------------------------------------------------------------------
+
+void CachedVfs::mkdir(const Path& path, mode_t mode)
+{
+    m_subvfs.mkdir(path, mode);
+
+    struct stat st{};
+    m_subvfs.getattr(path, st);
+    std::lock_guard lg{m_tree_mutex};
+    auto& new_node = m_tree.make_node(path);
+    new_node.st = st;
+}
+
+//--------------------------------------------------------------------------
+
+void CachedVfs::rmdir(const Path& path)
+{
+    m_subvfs.rmdir(path);
+    std::lock_guard lg{m_tree_mutex};
+    m_tree.remove_single(path);
+}
+
+//--------------------------------------------------------------------------
+
+void CachedVfs::unlink(const Path& path)
+{
+    m_subvfs.unlink(path);
+    std::lock_guard lg{m_tree_mutex};
+    m_tree.remove_single(path);
+}
+
+//--------------------------------------------------------------------------
+
+void CachedVfs::symlink(const Path& target, const Path& link_path)
+{
+    m_subvfs.symlink(target, link_path);
+
+    struct stat st{};
+    m_subvfs.getattr(link_path, st);
+    std::lock_guard lg{m_tree_mutex};
+    auto& new_node = m_tree.make_node(link_path);
+    new_node.st = st;
+}
+
+//--------------------------------------------------------------------------
+
+void CachedVfs::rename(const Path& old_path, const Path& new_path)
+{
+    m_subvfs.rename(old_path, new_path);
+
+    std::lock_guard lg{m_tree_mutex};
+    m_tree.rename(old_path, new_path);
+}
+
+//--------------------------------------------------------------------------
+
+void CachedVfs::chmod(const Path& path, const mode_t mode)
+{
+    m_subvfs.chmod(path, mode);
+    std::lock_guard lg{m_tree_mutex};
+    m_tree.chmod(path, mode);
+}
+
+//--------------------------------------------------------------------------
+
+void CachedVfs::truncate(const Path& path, const off_t length)
+{
+    m_subvfs.truncate(path, length);
+}
+
+//--------------------------------------------------------------------------
+
+IVfs::FileHandle CachedVfs::open(const Path& path, const int flags, const mode_t mode)
+{
+    return m_subvfs.open(path, flags, mode);
+}
+
+//--------------------------------------------------------------------------
+
+IVfs::FileHandle CachedVfs::open(const Path& path, const int flags)
+{
+    return m_subvfs.open(path, flags);
+}
+
+//--------------------------------------------------------------------------
+
+void CachedVfs::close(const FileHandle fh)
+{
+    m_subvfs.close(fh);
+}
+
+//--------------------------------------------------------------------------
+
+size_t CachedVfs::read(const FileHandle fh, const gsl::span<uint8_t> output, const off_t offset)
+{
+    return m_subvfs.read(fh, output, offset);
+}
+
+//--------------------------------------------------------------------------
+
+size_t CachedVfs::write(const FileHandle fh, const gsl::span<const uint8_t> input,
+                        const off_t offset)
+{
+    return m_subvfs.write(fh, input, offset);
 }
 
 //==========================================================================

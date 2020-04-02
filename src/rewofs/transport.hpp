@@ -56,6 +56,7 @@ public:
     class QueueRef;
 
     static constexpr Priority PRIORITY_DEFAULT{10};
+    static constexpr Priority PRIORITY_HIGH{100};
 
     /// @param seed for message ID's
     void set_msgid_seed(const uint64_t seed);

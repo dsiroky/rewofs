@@ -205,7 +205,7 @@ static int create(const char* path, mode_t mode, struct fuse_file_info* fi) noex
     log_trace("path:{} mode:{:o}", path, mode);
     try
     {
-        fi->fh = g_vfs->open(path, fi->flags, mode);
+        fi->fh = g_vfs->open(path, fi->flags, mode).value_of();
         log_trace("handle:{}", fi->fh);
     }
     catch (...)
@@ -220,7 +220,7 @@ static int open(const char* path, struct fuse_file_info *fi) noexcept
     log_trace("path:{}", path);
     try
     {
-        fi->fh = g_vfs->open(path, fi->flags);
+        fi->fh = g_vfs->open(path, fi->flags).value_of();
         log_trace("handle:{}", fi->fh);
     }
     catch (...)
@@ -348,14 +348,9 @@ void Fuse::run()
         throw std::runtime_error{"can't set signal handlers"};
     }
 
-    res = fuse_loop_mt(fuse);
+    fuse_loop_mt(fuse);
     log_info("quitting");
-    if (res == -1)
-    {
-        throw std::runtime_error{"can't set signal handlers"};
-    }
-
-    fuse_unmount("/tmp/m", ch);
+    fuse_unmount(m_mountpoint.c_str(), ch);
 }
 
 //==========================================================================

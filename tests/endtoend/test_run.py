@@ -82,7 +82,7 @@ class TestBrowsing(TestClientServer):
             pass
         with open(self.source_dir + "/x/bin.box", "w"):
             pass
-        os.symlink(self.source_dir + "/hurdygurdy", self.source_dir + "/a/bb/link")
+        os.symlink("hurdygurdy", self.source_dir + "/a/bb/link")
 
         self.run_client()
 
@@ -100,6 +100,7 @@ class TestBrowsing(TestClientServer):
 
         self.assertFalse(os.path.exists(self.mount_dir + "/u"))
         self.assertFalse(os.path.exists(self.mount_dir + "/u/sdf"))
+        self.assertFalse(os.path.exists(self.mount_dir + "/hurdygurdy"))
 
     def test_read_symlinks(self):
         os.symlink("a", self.source_dir + "/lnk")
@@ -215,6 +216,7 @@ class TestBrowsing(TestClientServer):
             pass
         with open(self.source_dir + "/x2", "w"):
             pass
+        os.makedirs(self.source_dir + "/y/suby")
 
         self.run_client()
 
@@ -226,6 +228,7 @@ class TestBrowsing(TestClientServer):
         os.rename(self.mount_dir + "/d", self.mount_dir + "/d3")
         os.rename(self.mount_dir + "/x", self.mount_dir + "/x3")
         os.rename(self.mount_dir + "/s1", self.mount_dir + "/s2/s")
+        os.rename(self.mount_dir + "/y", self.mount_dir + "/s2/s/yy")
 
         self.assertFalse(os.path.isdir(self.source_dir + "/d"))
         self.assertTrue(os.path.isdir(self.source_dir + "/d3"))
@@ -233,6 +236,15 @@ class TestBrowsing(TestClientServer):
         self.assertTrue(os.path.isfile(self.source_dir + "/x3"))
         self.assertFalse(os.path.isdir(self.source_dir + "/s1"))
         self.assertTrue(os.path.isdir(self.source_dir + "/s2/s"))
+        self.assertTrue(os.path.isdir(self.source_dir + "/s2/s/yy/suby"))
+
+        self.assertFalse(os.path.isdir(self.mount_dir + "/d"))
+        self.assertTrue(os.path.isdir(self.mount_dir + "/d3"))
+        self.assertFalse(os.path.isfile(self.mount_dir + "/x"))
+        self.assertTrue(os.path.isfile(self.mount_dir + "/x3"))
+        self.assertFalse(os.path.isdir(self.mount_dir + "/s1"))
+        self.assertTrue(os.path.isdir(self.mount_dir + "/s2/s"))
+        self.assertTrue(os.path.isdir(self.mount_dir + "/s2/s/yy/suby"))
 
     def test_chmod(self):
         with open(self.source_dir + "/x", "w"):

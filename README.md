@@ -9,4 +9,3 @@
 
 Assumptions:
 - single user access
-- no on-remote-host modifications (TBD)

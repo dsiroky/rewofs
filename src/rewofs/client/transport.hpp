@@ -8,6 +8,7 @@
 
 #include <thread>
 
+#include "rewofs/client/config.hpp"
 #include "rewofs/transport.hpp"
 
 //==========================================================================
@@ -35,6 +36,42 @@ private:
     std::thread m_writer{};
     std::atomic<bool> m_quit{false};
 };
+
+//==========================================================================
+
+/// Channel for single commands/responses.
+class SingleComm
+{
+public:
+    SingleComm(Serializer& serializer, Deserializer& deserializer);
+
+    template<typename _Result, typename _Command>
+    Deserializer::Result<_Result>
+        single_command(flatbuffers::FlatBufferBuilder& fbb,
+                       const flatbuffers::Offset<_Command> command);
+
+private:
+    Serializer& m_serializer;
+    Deserializer& m_deserializer;
+};
+
+//--------------------------------------------------------------------------
+
+template<typename _Result, typename _Command>
+Deserializer::Result<_Result>
+    SingleComm::single_command(flatbuffers::FlatBufferBuilder& fbb,
+                              const flatbuffers::Offset<_Command> command)
+{
+    auto queue = m_serializer.new_queue(Serializer::PRIORITY_DEFAULT);
+    const auto mid = m_serializer.add_command(queue, fbb, command);
+    log_trace("mid:{}", strong::value_of(mid));
+    const auto res = m_deserializer.wait_for_result<_Result>(mid, TIMEOUT);
+    if (not res.is_valid())
+    {
+        throw std::system_error{EHOSTUNREACH, std::generic_category()};
+    }
+    return res;
+}
 
 //==========================================================================
 } // namespace rewofs::client

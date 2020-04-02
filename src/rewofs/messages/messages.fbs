@@ -18,13 +18,29 @@ struct Stat
     st_mtim:Time;
 }
 
-table DirectoryItem
+table TreeNode
 {
-    path:string;
+    name:string;
     st:Stat;
+    children:[TreeNode];
 }
 
 //==========================================================================
+
+table Ping {}
+table Pong {}
+
+//==========================================================================
+
+table CommandReadTree
+{
+    path:string;
+}
+table ResultReadTree
+{
+    res_errno:int32;
+    tree:TreeNode;
+}
 
 table CommandStat
 {
@@ -43,7 +59,7 @@ table CommandReaddir
 table ResultReaddir
 {
     res_errno:int32;
-    items:[DirectoryItem];
+    items:[TreeNode];
 }
 
 table CommandReadlink

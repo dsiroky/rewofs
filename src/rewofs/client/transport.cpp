@@ -5,6 +5,7 @@
 #include <nanomsg/nn.h>
 #include <nanomsg/pair.h>
 
+#include "rewofs/client/config.hpp"
 #include "rewofs/client/transport.hpp"
 #include "rewofs/log.hpp"
 #include "rewofs/nanomsg.hpp"
@@ -101,6 +102,14 @@ void Transport::run_writer()
         }
         m_serializer.wait(std::chrono::milliseconds{100});
     }
+}
+
+//==========================================================================
+
+SingleComm::SingleComm(Serializer& serializer, Deserializer& deserializer)
+    : m_serializer{serializer}
+    , m_deserializer{deserializer}
+{
 }
 
 //==========================================================================

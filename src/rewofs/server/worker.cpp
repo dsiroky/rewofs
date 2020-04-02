@@ -6,6 +6,10 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#include "rewofs/disablewarnings.hpp"
+#include <boost/range/iterator_range.hpp>
+#include "rewofs/enablewarnings.hpp"
+
 #include "rewofs/log.hpp"
 #include "rewofs/server/worker.hpp"
 
@@ -25,6 +29,8 @@ void copy(const timespec& src, messages::Time& dst)
     dst.mutate_sec(src.tv_sec);
 }
 
+//--------------------------------------------------------------------------
+
 void copy(struct stat& src, messages::Stat& dst)
 {
     dst.mutate_st_mode(src.st_mode);
@@ -33,6 +39,54 @@ void copy(struct stat& src, messages::Stat& dst)
     copy(src.st_atim, dst.mutable_st_atim());
     copy(src.st_ctim, dst.mutable_st_ctim());
     copy(src.st_mtim, dst.mutable_st_mtim());
+}
+
+//--------------------------------------------------------------------------
+
+flatbuffers::Offset<messages::TreeNode>
+    build_fs_fbb_tree(flatbuffers::FlatBufferBuilder& fbb, const fs::path& path)
+{
+    // TODO limit depth (possible loops via e.g. mount -oloop)
+
+    log_trace("node {}", path.native());
+
+    struct stat st{};
+    const auto res = lstat(path.c_str(), &st);
+    messages::Stat fbb_stat{};
+    if (res == 0)
+    {
+        copy(st, fbb_stat);
+    }
+    else
+    {
+        log_warning("{} {} {}", path.native(), res, errno);
+    }
+
+    std::vector<flatbuffers::Offset<messages::TreeNode>> vec_children{};
+    try
+    {
+        if (fs::is_directory(path))
+        {
+            const auto children
+                = boost::make_iterator_range(fs::directory_iterator(path), {});
+            for (const auto& child : children)
+            {
+                vec_children.push_back(build_fs_fbb_tree(fbb, child.path()));
+            }
+        }
+    }
+    catch (const std::exception& exc)
+    {
+        log_warning("{} {}", path.native(), exc.what());
+    }
+
+    const auto fbb_name = fbb.CreateString(path.filename().native());
+    const auto fbb_children = fbb.CreateVector(vec_children);
+    messages::TreeNodeBuilder builder{fbb};
+    builder.add_name(fbb_name);
+    builder.add_st(&fbb_stat);
+    builder.add_children(fbb_children);
+    return builder.Finish();
 }
 
 //==========================================================================
@@ -49,6 +103,8 @@ Worker::Worker(server::Transport& transport)
         [this](const MessageId mid, const auto& msg) { \
             process_message(mid, msg, &Worker::func); \
         });
+    SUB(Ping, process_ping);
+    SUB(CommandReadTree, process_read_tree);
     SUB(CommandStat, process_stat);
     SUB(CommandReaddir, process_readdir);
     SUB(CommandReadlink, process_readlink);
@@ -117,6 +173,32 @@ void Worker::process_message(const MessageId mid, const _Msg& msg, _ProcFunc pro
 
 //--------------------------------------------------------------------------
 
+flatbuffers::Offset<messages::Pong>
+    Worker::process_ping(flatbuffers::FlatBufferBuilder& fbb, const messages::Ping&)
+{
+    return messages::CreatePong(fbb);
+}
+
+//--------------------------------------------------------------------------
+
+flatbuffers::Offset<messages::ResultReadTree>
+    Worker::process_read_tree(flatbuffers::FlatBufferBuilder& fbb,
+                              const messages::CommandReadTree& msg)
+{
+    const auto path = map_path(msg.path()->c_str());
+    log_trace("read tree {}", path.native());
+
+    auto tree = build_fs_fbb_tree(fbb, path);
+    auto res_builder = messages::ResultReadTreeBuilder{fbb};
+    res_builder.add_res_errno(0);
+    res_builder.add_tree(tree);
+    const auto ret = res_builder.Finish();
+    log_trace("tree msg size ~ {}", ret.o);
+    return ret;
+}
+
+//--------------------------------------------------------------------------
+
 flatbuffers::Offset<messages::ResultStat>
     Worker::process_stat(flatbuffers::FlatBufferBuilder& fbb,
                          const messages::CommandStat& msg)
@@ -152,7 +234,7 @@ flatbuffers::Offset<messages::ResultReaddir>
     const auto path = map_path(msg.path()->c_str());
     log_trace("{}", path.native());
 
-    std::vector<flatbuffers::Offset<messages::DirectoryItem>> items{};
+    std::vector<flatbuffers::Offset<messages::TreeNode>> items{};
 
     try
     {
@@ -167,12 +249,12 @@ flatbuffers::Offset<messages::ResultReaddir>
             {
                 messages::Stat msg_st{};
                 copy(st, msg_st);
-                const auto item = messages::CreateDirectoryItem(fbb, item_path, &msg_st);
+                const auto item = messages::CreateTreeNode(fbb, item_path, &msg_st);
                 items.push_back(item);
             }
             else
             {
-                const auto item = messages::CreateDirectoryItem(fbb, item_path, nullptr);
+                const auto item = messages::CreateTreeNode(fbb, item_path, nullptr);
                 items.push_back(item);
             }
         }
