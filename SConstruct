@@ -83,7 +83,7 @@ env.PretifyOutput(verbose,
 env["CONFIGUREDIR"] = "$BUILD_DIR/sconf_temp"
 env["CONFIGURELOG"] = "$BUILD_DIR/config.log"
 if not env.GetOption("clean"):
-    print "Checking compiler warnings..."
+    print("Checking compiler warnings...")
     code = "void f(){}"
     conf = Configure(env.Clone())
     c_warnings = []
