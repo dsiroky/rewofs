@@ -6,7 +6,9 @@
 #ifndef LOG_HPP__KQWESS9N
 #define LOG_HPP__KQWESS9N
 
+#include "rewofs/disablewarnings.hpp"
 #include <fmt/format.h>
+#include "rewofs/enablewarnings.hpp"
 
 //==========================================================================
 namespace rewofs {

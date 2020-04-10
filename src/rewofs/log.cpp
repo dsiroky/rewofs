@@ -2,7 +2,9 @@
 ///
 /// @file
 
+#include "rewofs/disablewarnings.hpp"
 #include <spdlog/spdlog.h>
+#include "rewofs/enablewarnings.hpp"
 
 #include "rewofs/log.hpp"
 
