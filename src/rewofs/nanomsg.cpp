@@ -2,10 +2,9 @@
 ///
 /// @file
 
+#include "rewofs/disablewarnings.hpp"
 #include <fmt/format.h>
 #include <nanomsg/nn.h>
-
-#include "rewofs/disablewarnings.hpp"
 #include <boost/scope_exit.hpp>
 #include "rewofs/enablewarnings.hpp"
 
@@ -31,7 +30,9 @@ int check(const std::string& message, const int ret)
 void receive(int sock, const std::function<void(const gsl::span<const uint8_t>)> recv_cb)
 {
     char* buf{nullptr};
+#include "rewofs/disablewarnings.hpp"
     const int recv_len{nn_recv(sock, &buf, NN_MSG, 0)};
+#include "rewofs/enablewarnings.hpp"
     if (recv_len >= 0)
     {
         BOOST_SCOPE_EXIT_ALL(&buf) { nn_freemsg(buf); };

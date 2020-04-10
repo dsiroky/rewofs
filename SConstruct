@@ -175,6 +175,9 @@ env.AppendUnique(
             "-fstrict-aliasing",
             "-fsigned-char",
 
+            "-ffunction-sections",
+            "-fdata-sections",
+
             "-pedantic",
             "-Wall",
             "-Wextra",
@@ -182,8 +185,11 @@ env.AppendUnique(
     CFLAGS=["-std=c11"],
     CXXFLAGS=[
             "-std=c++17",
-            ],
-    LINKFLAGS=["-pthread"]
+        ],
+    LINKFLAGS=[
+            "-pthread",
+            "-Wl,--gc-sections",
+        ]
     )
 
 if "clang" in env["CC"]:

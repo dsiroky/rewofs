@@ -23,7 +23,7 @@ OUT = "rewofs"
 
 rewofs_lib = [
         src_env.WholeArchive(rewofs_env.StaticLibrary(OUT, SRC)),
-        "fuse", "nanomsg", "fmt",
+        "fuse", "nanomsg", "anl", "fmt",
         "boost_program_options", "boost_filesystem", "boost_system",
     ]
 
