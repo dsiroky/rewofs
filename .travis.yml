@@ -11,6 +11,7 @@ before_install:
         libboost-program-options-dev
         libfmt-dev
         libfuse-dev
+        libgtest-dev
         libnanomsg-dev
         libspdlog-dev
         python3-nose2

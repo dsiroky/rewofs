@@ -1,7 +1,7 @@
 #!/bin/bash
 set -ex
 
-scons
+scons debug=1
 ./build/last/tests/unit/run
 
 scons debug=0
