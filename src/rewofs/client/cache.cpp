@@ -15,14 +15,14 @@ Tree::Tree()
 
 //--------------------------------------------------------------------------
 
-Node& Tree::raw_get_root()
+Node& Tree::get_root()
 {
     return m_root;
 }
 
 //--------------------------------------------------------------------------
 
-Node& Tree::raw_make_node(Node& parent, const std::string& name)
+Node& Tree::make_node(Node& parent, const std::string& name)
 {
     assert(parent.children.find(name) == parent.children.end());
     Node new_node{};
@@ -30,20 +30,6 @@ Node& Tree::raw_make_node(Node& parent, const std::string& name)
     auto [it, inserted] = parent.children.emplace(name, std::move(new_node));
     assert(inserted); (void) inserted;
     return it->second;
-}
-
-//--------------------------------------------------------------------------
-
-struct stat Tree::lstat(const Path& path)
-{
-    return get_node(path).st;
-}
-
-//--------------------------------------------------------------------------
-
-void Tree::chmod(const Path& path, const mode_t mode)
-{
-    get_node(path).st.st_mode = mode;
 }
 
 //--------------------------------------------------------------------------

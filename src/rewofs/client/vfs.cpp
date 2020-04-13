@@ -258,7 +258,7 @@ IVfs::FileHandle RemoteVfs::open_common(const Path& path, const int flags,
 
 //--------------------------------------------------------------------------
 
-IVfs::FileHandle RemoteVfs::open(const Path& path, const int flags, const mode_t mode)
+IVfs::FileHandle RemoteVfs::create(const Path& path, const int flags, const mode_t mode)
 {
     return open_common(path, flags, mode);
 }
@@ -414,7 +414,7 @@ void CachedVfs::populate_tree()
     }
 
     std::lock_guard lg{m_tree_mutex};
-    populate_tree(m_tree.raw_get_root(), *message.tree());
+    populate_tree(m_tree.get_root(), *message.tree());
 }
 
 //--------------------------------------------------------------------------
@@ -425,7 +425,7 @@ void CachedVfs::populate_tree(cache::Node& node, const messages::TreeNode& fbb_n
     copy(*fbb_node.st(), node.st);
     for (const auto& child: *fbb_node.children())
     {
-        auto& new_child = m_tree.raw_make_node(node, child->name()->str());
+        auto& new_child = m_tree.make_node(node, child->name()->str());
         populate_tree(new_child, *child);
     }
 }
@@ -435,7 +435,7 @@ void CachedVfs::populate_tree(cache::Node& node, const messages::TreeNode& fbb_n
 void CachedVfs::getattr(const Path& path, struct stat& st)
 {
     std::lock_guard lg{m_tree_mutex};
-    st = m_tree.lstat(path);
+    st = m_tree.get_node(path).st;
 }
 
 //--------------------------------------------------------------------------
@@ -512,7 +512,7 @@ void CachedVfs::chmod(const Path& path, const mode_t mode)
 {
     m_subvfs.chmod(path, mode);
     std::lock_guard lg{m_tree_mutex};
-    m_tree.chmod(path, mode);
+    m_tree.get_node(path).st.st_mode = mode;
 }
 
 //--------------------------------------------------------------------------
@@ -520,20 +520,34 @@ void CachedVfs::chmod(const Path& path, const mode_t mode)
 void CachedVfs::truncate(const Path& path, const off_t length)
 {
     m_subvfs.truncate(path, length);
+    std::lock_guard lg{m_tree_mutex};
+    m_tree.get_node(path).st.st_size = length;
 }
 
 //--------------------------------------------------------------------------
 
-IVfs::FileHandle CachedVfs::open(const Path& path, const int flags, const mode_t mode)
+IVfs::FileHandle CachedVfs::create(const Path& path, const int flags, const mode_t mode)
 {
-    return m_subvfs.open(path, flags, mode);
+    const auto handle = m_subvfs.create(path, flags, mode);
+
+    struct stat st{};
+    m_subvfs.getattr(path, st);
+
+    std::lock_guard lg{m_tree_mutex};
+    m_tree.make_node(path).st = st;
+    File file{path};
+    m_opened_files.emplace(std::make_pair(handle, std::move(file)));
+    return handle;
 }
 
 //--------------------------------------------------------------------------
 
 IVfs::FileHandle CachedVfs::open(const Path& path, const int flags)
 {
-    return m_subvfs.open(path, flags);
+    const auto handle = m_subvfs.open(path, flags);
+    File file{path};
+    m_opened_files.emplace(std::make_pair(handle, std::move(file)));
+    return handle;
 }
 
 //--------------------------------------------------------------------------
@@ -541,11 +555,17 @@ IVfs::FileHandle CachedVfs::open(const Path& path, const int flags)
 void CachedVfs::close(const FileHandle fh)
 {
     m_subvfs.close(fh);
+    const auto it = m_opened_files.find(fh);
+    if (it != m_opened_files.end())
+    {
+        m_opened_files.erase(it);
+    }
 }
 
 //--------------------------------------------------------------------------
 
-size_t CachedVfs::read(const FileHandle fh, const gsl::span<uint8_t> output, const off_t offset)
+size_t CachedVfs::read(const FileHandle fh, const gsl::span<uint8_t> output,
+                       const off_t offset)
 {
     return m_subvfs.read(fh, output, offset);
 }
@@ -555,7 +575,14 @@ size_t CachedVfs::read(const FileHandle fh, const gsl::span<uint8_t> output, con
 size_t CachedVfs::write(const FileHandle fh, const gsl::span<const uint8_t> input,
                         const off_t offset)
 {
-    return m_subvfs.write(fh, input, offset);
+    const auto res = m_subvfs.write(fh, input, offset);
+
+    const auto& file = m_opened_files.at(fh);
+    std::lock_guard lg{m_tree_mutex};
+    auto& node = m_tree.get_node(file.path);
+    node.st.st_size = std::max(node.st.st_size, offset + static_cast<off_t>(res));
+
+    return res;
 }
 
 //==========================================================================

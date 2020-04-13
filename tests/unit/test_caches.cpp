@@ -12,55 +12,33 @@
 namespace rewofs::tests {
 //==========================================================================
 
-TEST(CacheTree, Lstat_Root)
+TEST(CacheTree, GetNode_Root)
 {
     client::cache::Tree tree{};
-    EXPECT_NO_THROW(tree.lstat("/"));
+    EXPECT_NO_THROW(tree.get_node("/"));
 }
 
 //--------------------------------------------------------------------------
 
-TEST(CacheTree, Lstat_NonexistentInRoot)
+TEST(CacheTree, GetNode_NonexistentInRoot)
 {
     client::cache::Tree tree{};
-    EXPECT_THROW(tree.lstat("/nonexistent"), std::system_error);
+    EXPECT_THROW(tree.get_node("/nonexistent"), std::system_error);
 }
 
 //--------------------------------------------------------------------------
 
-TEST(CacheTree, MakeNode_Lstat)
+TEST(CacheTree, MakeNode_GetNode)
 {
     client::cache::Tree tree{};
-    auto& root = tree.raw_get_root();
-    auto& some = tree.raw_make_node(root, "some");
-    EXPECT_NO_THROW(tree.lstat("/some"));
-    tree.raw_make_node(root, "some2");
-    EXPECT_NO_THROW(tree.lstat("/some2"));
-    tree.raw_make_node(some, "sub");
-    EXPECT_NO_THROW(tree.lstat("/some/sub"));
-    EXPECT_THROW(tree.lstat("/some/sub2"), std::system_error);
-}
-
-//--------------------------------------------------------------------------
-
-TEST(CacheTree, Chmod)
-{
-    client::cache::Tree tree{};
-    auto& root = tree.raw_get_root();
-    auto& some = tree.raw_make_node(root, "some");
-    tree.raw_make_node(root, "some2");
-    tree.raw_make_node(some, "sub");
-
-    tree.chmod("/", 1);
-    tree.chmod("/some", 20);
-    tree.chmod("/some2", 333);
-    tree.chmod("/some/sub", 4);
-    EXPECT_THROW(tree.chmod("/some/sub2", 9), std::system_error);
-
-    EXPECT_EQ(tree.lstat("/").st_mode, 1);
-    EXPECT_EQ(tree.lstat("/some").st_mode, 20);
-    EXPECT_EQ(tree.lstat("/some2").st_mode, 333);
-    EXPECT_EQ(tree.lstat("/some/sub").st_mode, 4);
+    auto& root = tree.get_root();
+    auto& some = tree.make_node(root, "some");
+    EXPECT_NO_THROW(tree.get_node("/some"));
+    tree.make_node(root, "some2");
+    EXPECT_NO_THROW(tree.get_node("/some2"));
+    tree.make_node(some, "sub");
+    EXPECT_NO_THROW(tree.get_node("/some/sub"));
+    EXPECT_THROW(tree.get_node("/some/sub2"), std::system_error);
 }
 
 //==========================================================================

@@ -279,17 +279,19 @@ flatbuffers::Offset<messages::ResultReadlink>
 {
     const auto path = map_path(msg.path()->c_str());
 
-    std::string buf(1024, ' ');
-    const auto res = readlink(path.c_str(), buf.data(), buf.size());
-    log_trace("{} res:{}", path.native(), res);
-
-    if (res < 0)
+    try
     {
-        return messages::CreateResultReadlink(fbb, errno);
+        const auto resolved = fs::read_symlink(path);
+        return messages::CreateResultReadlinkDirect(fbb, 0, resolved.c_str());
     }
-
-    buf = buf.substr(0, static_cast<size_t>(res));
-    return messages::CreateResultReadlink(fbb, 0, fbb.CreateString(buf));
+    catch (const fs::filesystem_error& exc)
+    {
+        return messages::CreateResultReadlink(fbb, exc.code().value());
+    }
+    catch (...)
+    {
+        return messages::CreateResultReadlink(fbb, EIO);
+    }
 }
 
 //--------------------------------------------------------------------------

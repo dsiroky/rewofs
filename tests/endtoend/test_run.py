@@ -106,9 +106,7 @@ class TestBrowsing(TestClientServer):
         os.symlink("a", self.source_dir + "/lnk")
         os.symlink("a/b/c", self.source_dir + "/lnk2")
         os.symlink("/someroot/a/b/c", self.source_dir + "/lnk3")
-        # internal limit is 1024 characters
-        os.symlink("abcd" * 256, self.source_dir + "/lnk4")
-        os.symlink("abcd" * 256 + "efgh", self.source_dir + "/lnk5")
+        os.symlink("abcd" * 50 + "efgh", self.source_dir + "/lnk4")
         with open(self.source_dir + "/notlink", "w"):
             pass
 
@@ -117,9 +115,7 @@ class TestBrowsing(TestClientServer):
         self.assertEqual(os.readlink(self.mount_dir + "/lnk"), "a")
         self.assertEqual(os.readlink(self.mount_dir + "/lnk2"), "a/b/c")
         self.assertEqual(os.readlink(self.mount_dir + "/lnk3"), "/someroot/a/b/c")
-        self.assertEqual(os.readlink(self.mount_dir + "/lnk4"), "abcd" * 256)
-        # internal limit is 1024 characters
-        self.assertEqual(os.readlink(self.mount_dir + "/lnk5"), "abcd" * 256)
+        self.assertEqual(os.readlink(self.mount_dir + "/lnk4"), "abcd" * 50 + "efgh")
 
         with self.assertRaises(Exception):
             os.readlink(self.mount_dir + "/notlink")
@@ -338,6 +334,11 @@ class TestIO(TestClientServer):
         with open(self.mount_dir + "/f2", "wb") as fw:
             fw.write(data2)
 
+        self.assertTrue(os.path.isfile(self.mount_dir + "/f1"))
+        self.assertEqual(os.path.getsize(self.mount_dir + "/f1"), 10000000)
+        self.assertTrue(os.path.isfile(self.mount_dir + "/f2"))
+        self.assertEqual(os.path.getsize(self.mount_dir + "/f2"), 10000000)
+
         with open(self.source_dir + "/f1", "rb") as fr:
             self.assertEqual(data1, fr.read())
         with open(self.source_dir + "/f2", "rb") as fr:
@@ -352,6 +353,11 @@ class TestIO(TestClientServer):
             with open(self.mount_dir + "/f2", "wb") as fw2:
                 fw1.write(data1)
                 fw2.write(data2)
+
+        self.assertTrue(os.path.isfile(self.mount_dir + "/f1"))
+        self.assertEqual(os.path.getsize(self.mount_dir + "/f1"), 10000000)
+        self.assertTrue(os.path.isfile(self.mount_dir + "/f2"))
+        self.assertEqual(os.path.getsize(self.mount_dir + "/f2"), 10000000)
 
         with open(self.source_dir + "/f1", "rb") as fr:
                 self.assertEqual(data1, fr.read())
@@ -396,7 +402,7 @@ class TestIO(TestClientServer):
 
         self.assertEqual(os.path.getsize(self.mount_dir + "/f"), 100)
 
-    def test_parallel_io(self):
+    def test_parallel_writes(self):
         self.run_client()
 
         error_in_thread = [None]

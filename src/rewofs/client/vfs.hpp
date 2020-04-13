@@ -48,7 +48,7 @@ public:
         = 0;
     virtual void chmod(const Path& path, const mode_t mode) = 0;
     virtual void truncate(const Path& path, const off_t length) = 0;
-    virtual FileHandle open(const Path& path, const int flags, const mode_t mode) = 0;
+    virtual FileHandle create(const Path& path, const int flags, const mode_t mode) = 0;
     virtual FileHandle open(const Path& path, const int flags) = 0;
     virtual void close(const FileHandle fh) = 0;
     virtual size_t read(const FileHandle fh, const gsl::span<uint8_t> output,
@@ -81,7 +81,7 @@ public:
     void rename(const Path& old_path, const Path& new_path) override;
     void chmod(const Path& path, const mode_t mode) override;
     void truncate(const Path& path, const off_t length) override;
-    FileHandle open(const Path& path, const int flags, const mode_t mode) override;
+    FileHandle create(const Path& path, const int flags, const mode_t mode) override;
     FileHandle open(const Path& path, const int flags) override;
     void close(const FileHandle fh) override;
     size_t read(const FileHandle fh, const gsl::span<uint8_t> output,
@@ -130,7 +130,7 @@ public:
     void rename(const Path& old_path, const Path& new_path) override;
     void chmod(const Path& path, const mode_t mode) override;
     void truncate(const Path& path, const off_t length) override;
-    FileHandle open(const Path& path, const int flags, const mode_t mode) override;
+    FileHandle create(const Path& path, const int flags, const mode_t mode) override;
     FileHandle open(const Path& path, const int flags) override;
     void close(const FileHandle fh) override;
     size_t read(const FileHandle fh, const gsl::span<uint8_t> output,
@@ -141,12 +141,18 @@ public:
 private:
     void populate_tree(cache::Node& node, const messages::TreeNode& fbb_node);
 
+    struct File
+    {
+        Path path{};
+    };
+
     IVfs& m_subvfs;
     Serializer& m_serializer;
     Deserializer& m_deserializer;
     SingleComm m_comm{m_serializer, m_deserializer};
     cache::Tree m_tree{};
     std::mutex m_tree_mutex{};
+    std::unordered_map<FileHandle, File> m_opened_files{};
 };
 
 //==========================================================================

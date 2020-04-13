@@ -42,18 +42,15 @@ class Tree
 public:
     Tree();
 
-    Node& raw_get_root();
-    Node& raw_make_node(Node& parent, const std::string& name);
-    struct stat lstat(const Path& path);
-    void chmod(const Path& path, const mode_t mode);
+    Node& get_root();
+    Node& make_node(Node& parent, const std::string& name);
+    Node& get_node(const Path& name);
     /// Remove a node only if it has no children.
     void remove_single(const Path& path);
     Node& make_node(const Path& path);
     void rename(const Path& from, const Path& to);
 
 private:
-    Node& get_node(const Path& name);
-
     Node m_root{};
 };
 

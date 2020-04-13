@@ -40,7 +40,11 @@ int gen_return_error_code()
         assert(err.code().value() > 0);
         return -err.code().value();
     }
-    log_error("eio");
+    catch (const std::exception& err)
+    {
+        log_error("{}", err.what());
+    }
+
     return -EIO;
 }
 
@@ -205,7 +209,7 @@ static int create(const char* path, mode_t mode, struct fuse_file_info* fi) noex
     log_trace("path:{} mode:{:o}", path, mode);
     try
     {
-        fi->fh = g_vfs->open(path, fi->flags, mode).value_of();
+        fi->fh = g_vfs->create(path, fi->flags, mode).value_of();
         log_trace("handle:{}", fi->fh);
     }
     catch (...)
