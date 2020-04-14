@@ -45,6 +45,8 @@ public:
     Node& get_root();
     Node& make_node(Node& parent, const std::string& name);
     Node& get_node(const Path& name);
+    /// Drop the whole tree.
+    void reset();
     /// Remove a node only if it has no children.
     void remove_single(const Path& path);
     Node& make_node(const Path& path);

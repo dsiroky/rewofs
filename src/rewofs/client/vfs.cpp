@@ -405,7 +405,8 @@ void CachedVfs::populate_tree()
 
     flatbuffers::FlatBufferBuilder fbb{};
     const auto command = messages::CreateCommandReadTreeDirect(fbb, "/");
-    const auto res = m_comm.single_command<messages::ResultReadTree>(fbb, command);
+    const auto res = m_comm.single_command<messages::ResultReadTree>(
+        fbb, command, std::chrono::seconds{60});
 
     const auto& message = res.message();
     if (message.res_errno() != 0)
@@ -414,6 +415,7 @@ void CachedVfs::populate_tree()
     }
 
     std::lock_guard lg{m_tree_mutex};
+    m_tree.reset();
     populate_tree(m_tree.get_root(), *message.tree());
 }
 
@@ -442,7 +444,13 @@ void CachedVfs::getattr(const Path& path, struct stat& st)
 
 void CachedVfs::readdir(const Path& path, const DirFiller& filler)
 {
-    m_subvfs.readdir(path, filler);
+    std::lock_guard lg{m_tree_mutex};
+    const auto& node = m_tree.get_node(path);
+
+    for (const auto& [name, child]: node.children)
+    {
+        filler(name, child.st);
+    }
 }
 
 //--------------------------------------------------------------------------

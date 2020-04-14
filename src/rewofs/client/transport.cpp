@@ -27,12 +27,14 @@ Transport::Transport(Serializer& serializer, Deserializer& deserializer)
     nanomsg::check("nn_setsockopt", nn_setsockopt(m_socket, NN_SOL_SOCKET, NN_SNDTIMEO,
                                                   &tout, sizeof(tout)));
 
-    int bufsize{10 * 1024 * 1024};
+    // TODO make them smaller, chop messages
+    int bufsize{128 * 1024 * 1024};
     nanomsg::check("nn_setsockopt", nn_setsockopt(m_socket, NN_SOL_SOCKET, NN_RCVBUF,
                                                   &bufsize, sizeof(bufsize)));
     nanomsg::check("nn_setsockopt", nn_setsockopt(m_socket, NN_SOL_SOCKET, NN_SNDBUF,
                                                   &bufsize, sizeof(bufsize)));
-    int msgsize{1 * 1024 * 1024};
+    // TODO make them smaller, chop messages
+    int msgsize{64 * 1024 * 1024};
     nanomsg::check("nn_setsockopt", nn_setsockopt(m_socket, NN_SOL_SOCKET, NN_RCVMAXSIZE,
                                                   &msgsize, sizeof(msgsize)));
 }

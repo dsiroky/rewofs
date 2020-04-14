@@ -34,6 +34,13 @@ Node& Tree::make_node(Node& parent, const std::string& name)
 
 //--------------------------------------------------------------------------
 
+void Tree::reset()
+{
+    m_root.children.clear();
+}
+
+//--------------------------------------------------------------------------
+
 void Tree::remove_single(const Path& path)
 {
     if (path == "/")
