@@ -269,7 +269,7 @@ Deserializer::Result<_Msg>
         };
 
     std::unique_lock lg{m_mutex};
-    log_trace("waiting for mid:{}", strong::value_of(mid));
+    log_trace("waiting for mid:{} for {}ms", strong::value_of(mid), timeout.count());
 
     const auto until = std::chrono::steady_clock::now() + timeout;
     do {
