@@ -19,4 +19,21 @@ def lib_gen(env, libname, src, includedir):
         Export({libname: lib})
     return env
 
+#--------------------------------------------------------------------------
+
+def gtest_lib(env):
+    lib_gen(env, "gtest",
+            [
+                File("googletest/googletest/src/gtest-all.cc"),
+                File("googletest/googlemock/src/gmock-all.cc"),
+            ],
+            [
+                Dir("googletest/googletest"),
+                Dir("googletest/googletest/include"),
+                Dir("googletest/googlemock"),
+                Dir("googletest/googlemock/include"),
+            ])
+
 #==========================================================================
+
+gtest_lib(lib_env)
