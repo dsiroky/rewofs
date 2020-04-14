@@ -48,8 +48,6 @@ flatbuffers::Offset<messages::TreeNode>
 {
     // TODO limit depth (possible loops via e.g. mount -oloop)
 
-    log_trace("node {}", path.native());
-
     struct stat st{};
     const auto res = lstat(path.c_str(), &st);
     messages::Stat fbb_stat{};
