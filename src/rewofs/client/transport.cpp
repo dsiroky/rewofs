@@ -7,6 +7,7 @@
 
 #include "rewofs/client/config.hpp"
 #include "rewofs/client/transport.hpp"
+#include "rewofs/compression.hpp"
 #include "rewofs/log.hpp"
 #include "rewofs/nanomsg.hpp"
 
@@ -84,7 +85,7 @@ void Transport::run_reader()
     while (not m_quit)
     {
         nanomsg::receive(m_socket, [this](const gsl::span<const uint8_t> buf) {
-            m_deserializer.process_frame(buf);
+            m_deserializer.process_frame(decompress(buf));
         });
     }
 }
@@ -99,7 +100,15 @@ void Transport::run_writer()
         while (m_serializer.is_consumable())
         {
             m_serializer.pop([this](const auto buf) {
-                nn_send(m_socket, buf.data(), buf.size(), 0);
+                try
+                {
+                    std::vector<uint8_t> cbuf{compress(buf)};
+                    nn_send(m_socket, cbuf.data(), cbuf.size(), 0);
+                }
+                catch (const std::exception& exc)
+                {
+                    log_error("{}", exc.what());
+                }
             });
         }
         m_serializer.wait(std::chrono::milliseconds{100});

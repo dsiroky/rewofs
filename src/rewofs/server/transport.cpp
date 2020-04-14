@@ -5,6 +5,7 @@
 #include <nanomsg/nn.h>
 #include <nanomsg/pair.h>
 
+#include "rewofs/compression.hpp"
 #include "rewofs/log.hpp"
 #include "rewofs/nanomsg.hpp"
 #include "rewofs/server/transport.hpp"
@@ -46,15 +47,17 @@ void Transport::set_endpoint(const std::string& endpoint)
 
 void Transport::send(const gsl::span<const uint8_t> buf)
 {
-    nn_send(m_socket, buf.data(), buf.size(), 0);
+    std::vector<uint8_t> cbuf{compress(buf)};
+    log_trace("compressed {} -> {}", buf.size(), cbuf.size());
+    nn_send(m_socket, cbuf.data(), cbuf.size(), 0);
 }
 
 //--------------------------------------------------------------------------
 
 void Transport::recv(const std::function<void(const gsl::span<const uint8_t>)> cb)
 {
-    nanomsg::receive(m_socket, [cb](const gsl::span<const uint8_t> buf) {
-        cb(buf);
+    nanomsg::receive(m_socket, [cb](const gsl::span<const uint8_t> cbuf) {
+        cb(decompress(cbuf));
     });
 }
 
