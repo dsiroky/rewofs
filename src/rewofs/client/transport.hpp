@@ -48,7 +48,8 @@ public:
     template<typename _Result, typename _Command>
     Deserializer::Result<_Result>
         single_command(flatbuffers::FlatBufferBuilder& fbb,
-                       const flatbuffers::Offset<_Command> command);
+                       const flatbuffers::Offset<_Command> command,
+                       const std::chrono::milliseconds timeout = TIMEOUT);
 
 private:
     Serializer& m_serializer;
@@ -60,12 +61,13 @@ private:
 template<typename _Result, typename _Command>
 Deserializer::Result<_Result>
     SingleComm::single_command(flatbuffers::FlatBufferBuilder& fbb,
-                              const flatbuffers::Offset<_Command> command)
+                              const flatbuffers::Offset<_Command> command,
+                              const std::chrono::milliseconds timeout)
 {
     auto queue = m_serializer.new_queue(Serializer::PRIORITY_DEFAULT);
     const auto mid = m_serializer.add_command(queue, fbb, command);
     log_trace("mid:{}", strong::value_of(mid));
-    const auto res = m_deserializer.wait_for_result<_Result>(mid, TIMEOUT);
+    const auto res = m_deserializer.wait_for_result<_Result>(mid, timeout);
     if (not res.is_valid())
     {
         throw std::system_error{EHOSTUNREACH, std::generic_category()};
