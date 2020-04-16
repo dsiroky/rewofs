@@ -19,23 +19,15 @@
 #pragma GCC diagnostic ignored "-Wsign-compare"
 #pragma GCC diagnostic ignored "-Wsign-conversion"
 #pragma GCC diagnostic ignored "-Wsign-promo"
-#pragma GCC diagnostic ignored "-Wswitch-enum"
 #pragma GCC diagnostic ignored "-Wswitch-default"
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-#ifndef __APPLE__
+#pragma GCC diagnostic ignored "-Wswitch-enum"
 #pragma GCC diagnostic ignored "-Wunused-local-typedefs"
-#endif
+#pragma GCC diagnostic ignored "-Wunused-parameter"
 #ifdef __clang__
-#ifndef __APPLE__
-  #pragma GCC diagnostic ignored "-Winconsistent-missing-override"
-#endif
-#pragma GCC diagnostic ignored "-Wfloat-conversion"
-#pragma GCC diagnostic ignored "-Wgnu-zero-variadic-macro-arguments"
-#pragma GCC diagnostic ignored "-Wparentheses-equality"
-#if __clang_major__ * 100 + __clang_minor__ >= 309
-  #ifndef __APPLE__
+    #pragma GCC diagnostic ignored "-Winconsistent-missing-override"
+    #pragma GCC diagnostic ignored "-Wfloat-conversion"
+    #pragma GCC diagnostic ignored "-Wgnu-zero-variadic-macro-arguments"
+    #pragma GCC diagnostic ignored "-Wparentheses-equality"
     #pragma GCC diagnostic ignored "-Wexpansion-to-defined"
-  #endif
-  #pragma GCC diagnostic ignored "-Wnull-dereference"
-#endif
+    #pragma GCC diagnostic ignored "-Wnull-dereference"
 #endif
