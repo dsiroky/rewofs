@@ -414,7 +414,7 @@ void CachedVfs::populate_tree()
         throw std::system_error{message.res_errno(), std::generic_category()};
     }
 
-    std::lock_guard lg{m_tree_mutex};
+    std::lock_guard lg{m_mutex};
     m_tree.reset();
     populate_tree(m_tree.get_root(), *message.tree());
 }
@@ -436,7 +436,7 @@ void CachedVfs::populate_tree(cache::Node& node, const messages::TreeNode& fbb_n
 
 void CachedVfs::getattr(const Path& path, struct stat& st)
 {
-    std::lock_guard lg{m_tree_mutex};
+    std::lock_guard lg{m_mutex};
     st = m_tree.get_node(path).st;
 }
 
@@ -444,7 +444,7 @@ void CachedVfs::getattr(const Path& path, struct stat& st)
 
 void CachedVfs::readdir(const Path& path, const DirFiller& filler)
 {
-    std::lock_guard lg{m_tree_mutex};
+    std::lock_guard lg{m_mutex};
     const auto& node = m_tree.get_node(path);
 
     for (const auto& [name, child]: node.children)
@@ -468,7 +468,7 @@ void CachedVfs::mkdir(const Path& path, mode_t mode)
 
     struct stat st{};
     m_subvfs.getattr(path, st);
-    std::lock_guard lg{m_tree_mutex};
+    std::lock_guard lg{m_mutex};
     auto& new_node = m_tree.make_node(path);
     new_node.st = st;
 }
@@ -478,7 +478,7 @@ void CachedVfs::mkdir(const Path& path, mode_t mode)
 void CachedVfs::rmdir(const Path& path)
 {
     m_subvfs.rmdir(path);
-    std::lock_guard lg{m_tree_mutex};
+    std::lock_guard lg{m_mutex};
     m_tree.remove_single(path);
 }
 
@@ -487,8 +487,9 @@ void CachedVfs::rmdir(const Path& path)
 void CachedVfs::unlink(const Path& path)
 {
     m_subvfs.unlink(path);
-    std::lock_guard lg{m_tree_mutex};
+    std::lock_guard lg{m_mutex};
     m_tree.remove_single(path);
+    m_content_cache.delete_file(path);
 }
 
 //--------------------------------------------------------------------------
@@ -499,7 +500,7 @@ void CachedVfs::symlink(const Path& target, const Path& link_path)
 
     struct stat st{};
     m_subvfs.getattr(link_path, st);
-    std::lock_guard lg{m_tree_mutex};
+    std::lock_guard lg{m_mutex};
     auto& new_node = m_tree.make_node(link_path);
     new_node.st = st;
 }
@@ -510,7 +511,7 @@ void CachedVfs::rename(const Path& old_path, const Path& new_path)
 {
     m_subvfs.rename(old_path, new_path);
 
-    std::lock_guard lg{m_tree_mutex};
+    std::lock_guard lg{m_mutex};
     m_tree.rename(old_path, new_path);
 }
 
@@ -519,7 +520,7 @@ void CachedVfs::rename(const Path& old_path, const Path& new_path)
 void CachedVfs::chmod(const Path& path, const mode_t mode)
 {
     m_subvfs.chmod(path, mode);
-    std::lock_guard lg{m_tree_mutex};
+    std::lock_guard lg{m_mutex};
     m_tree.get_node(path).st.st_mode = mode;
 }
 
@@ -528,7 +529,7 @@ void CachedVfs::chmod(const Path& path, const mode_t mode)
 void CachedVfs::truncate(const Path& path, const off_t length)
 {
     m_subvfs.truncate(path, length);
-    std::lock_guard lg{m_tree_mutex};
+    std::lock_guard lg{m_mutex};
     m_tree.get_node(path).st.st_size = length;
 }
 
@@ -541,7 +542,7 @@ IVfs::FileHandle CachedVfs::create(const Path& path, const int flags, const mode
     struct stat st{};
     m_subvfs.getattr(path, st);
 
-    std::lock_guard lg{m_tree_mutex};
+    std::lock_guard lg{m_mutex};
     m_tree.make_node(path).st = st;
     File file{path};
     m_opened_files.emplace(std::make_pair(handle, std::move(file)));
@@ -554,6 +555,7 @@ IVfs::FileHandle CachedVfs::open(const Path& path, const int flags)
 {
     const auto handle = m_subvfs.open(path, flags);
     File file{path};
+    std::lock_guard lg{m_mutex};
     m_opened_files.emplace(std::make_pair(handle, std::move(file)));
     return handle;
 }
@@ -563,6 +565,7 @@ IVfs::FileHandle CachedVfs::open(const Path& path, const int flags)
 void CachedVfs::close(const FileHandle fh)
 {
     m_subvfs.close(fh);
+    std::lock_guard lg{m_mutex};
     const auto it = m_opened_files.find(fh);
     if (it != m_opened_files.end())
     {
@@ -575,7 +578,36 @@ void CachedVfs::close(const FileHandle fh)
 size_t CachedVfs::read(const FileHandle fh, const gsl::span<uint8_t> output,
                        const off_t offset)
 {
-    return m_subvfs.read(fh, output, offset);
+    std::unique_lock lg{m_mutex};
+    const auto it = m_opened_files.find(fh);
+    if (it == m_opened_files.end())
+    {
+        throw std::system_error{ENOENT, std::generic_category()};
+    }
+
+    bool has_cached_block = m_content_cache.read(
+        it->second.path, static_cast<uintmax_t>(offset), output.size(),
+        [&output](const auto& content) {
+            assert(content.size() == output.size());
+            std::copy(content.begin(), content.end(), output.begin());
+        });
+
+    lg.unlock();
+
+    if (has_cached_block)
+    {
+        log_trace("cache hit");
+        return output.size();
+    }
+    else
+    {
+        log_trace("cache miss");
+        const auto ret = m_subvfs.read(fh, output, offset);
+        lg.lock();
+        m_content_cache.write(it->second.path, static_cast<uintmax_t>(offset),
+                              {output.begin(), output.end()});
+        return ret;
+    }
 }
 
 //--------------------------------------------------------------------------
@@ -585,8 +617,8 @@ size_t CachedVfs::write(const FileHandle fh, const gsl::span<const uint8_t> inpu
 {
     const auto res = m_subvfs.write(fh, input, offset);
 
+    std::lock_guard lg{m_mutex};
     const auto& file = m_opened_files.at(fh);
-    std::lock_guard lg{m_tree_mutex};
     auto& node = m_tree.get_node(file.path);
     node.st.st_size = std::max(node.st.st_size, offset + static_cast<off_t>(res));
 

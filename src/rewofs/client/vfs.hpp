@@ -151,8 +151,9 @@ private:
     Deserializer& m_deserializer;
     SingleComm m_comm{m_serializer, m_deserializer};
     cache::Tree m_tree{};
-    std::mutex m_tree_mutex{};
+    cache::Content m_content_cache{};
     std::unordered_map<FileHandle, File> m_opened_files{};
+    std::mutex m_mutex{};
 };
 
 //==========================================================================

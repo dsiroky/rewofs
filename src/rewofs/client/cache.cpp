@@ -1,3 +1,4 @@
+#include <iostream>
 /// @copydoc cache.hpp
 ///
 /// @file
@@ -135,6 +136,45 @@ Node& Tree::get_node(const Path& path)
 
     assert(node != nullptr);
     return *node;
+}
+
+//--------------------------------------------------------------------------
+
+bool Content::read(const Path& path, const uintmax_t start, const size_t size,
+                   const std::function<void(const gsl::span<const uint8_t>)> store_cb)
+{
+    const auto it
+        = std::find_if(m_blocks.begin(), m_blocks.end(), [&](const auto& block) {
+              return (block.path == path) and (block.start == start)
+                     and (block.content.size() == size);
+          });
+    if (it == m_blocks.end())
+    {
+        return false;
+    }
+    store_cb(it->content);
+    return true;
+}
+
+//--------------------------------------------------------------------------
+
+void Content::write(const Path& path, const uintmax_t start, std::vector<uint8_t> content)
+{
+    Block b{};
+    b.path = path;
+    b.start = start;
+    b.content = content;
+    m_blocks.emplace_back(std::move(b));
+}
+
+//--------------------------------------------------------------------------
+
+void Content::delete_file(const Path& path)
+{
+    m_blocks.erase(
+        std::remove_if(m_blocks.begin(), m_blocks.end(),
+                       [&path](const auto& block) { return block.path == path; }),
+        m_blocks.end());
 }
 
 //==========================================================================

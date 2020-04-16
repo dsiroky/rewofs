@@ -14,6 +14,7 @@
 #include "rewofs/disablewarnings.hpp"
 #include <boost/filesystem.hpp>
 #include <boost/noncopyable.hpp>
+#include <gsl/span>
 #include "rewofs/enablewarnings.hpp"
 
 //==========================================================================
@@ -54,6 +55,31 @@ public:
 
 private:
     Node m_root{};
+};
+
+//==========================================================================
+
+/// Files content cache.
+/// TODO optimize, very naive now
+class Content
+{
+public:
+    /// @return false if the block was not found
+    bool read(const Path& path, const uintmax_t start, const size_t size,
+              const std::function<void(const gsl::span<const uint8_t>)> store_cb);
+    void write(const Path& path, const uintmax_t start, std::vector<uint8_t> content);
+    /// Delete all blocks related to the path.
+    void delete_file(const Path& path);
+
+private:
+    struct Block
+    {
+        Path path{};
+        uintmax_t start{};
+        std::vector<uint8_t> content{};
+    };
+
+    std::deque<Block> m_blocks{};
 };
 
 //==========================================================================
