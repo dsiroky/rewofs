@@ -14,6 +14,7 @@ before_install:
         libgtest-dev
         libnanomsg-dev
         libspdlog-dev
+        libzstd-dev
         python3-nose2
         scons
     - ci/install_flatbuffers.sh
