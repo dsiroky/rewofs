@@ -621,6 +621,8 @@ size_t CachedVfs::write(const FileHandle fh, const gsl::span<const uint8_t> inpu
     const auto& file = m_opened_files.at(fh);
     auto& node = m_tree.get_node(file.path);
     node.st.st_size = std::max(node.st.st_size, offset + static_cast<off_t>(res));
+    m_content_cache.write(file.path, static_cast<uintmax_t>(offset),
+                          {input.begin(), input.end()});
 
     return res;
 }

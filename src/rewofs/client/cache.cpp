@@ -160,11 +160,25 @@ bool Content::read(const Path& path, const uintmax_t start, const size_t size,
 
 void Content::write(const Path& path, const uintmax_t start, std::vector<uint8_t> content)
 {
-    Block b{};
-    b.path = path;
-    b.start = start;
-    b.content = content;
-    m_blocks.emplace_back(std::move(b));
+    const auto it
+        = std::find_if(m_blocks.begin(), m_blocks.end(), [&](const auto& block) {
+              return (block.path == path) and (block.start <= start)
+                     and (block.content.size() >= (start - block.start + content.size()));
+          });
+    if (it == m_blocks.end())
+    {
+        Block b{};
+        b.path = path;
+        b.start = start;
+        b.content = content;
+        m_blocks.emplace_back(std::move(b));
+    }
+    else
+    {
+        std::copy(
+            content.begin(), content.end(),
+            std::next(it->content.begin(), static_cast<ssize_t>(start - it->start)));
+    }
 }
 
 //--------------------------------------------------------------------------

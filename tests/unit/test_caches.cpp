@@ -86,6 +86,16 @@ TEST(Content, RW)
         }));
         EXPECT_THAT(out, t::ElementsAre(4, 5, 6));
     }
+
+    content.write("/d", 11, {40, 41});
+
+    {
+        std::vector<uint8_t> out{};
+        EXPECT_TRUE(content.read("/d", 10, 3, [&out](const auto& buf) {
+            std::copy(buf.begin(), buf.end(), std::back_inserter(out));
+        }));
+        EXPECT_THAT(out, t::ElementsAre(1, 40, 41));
+    }
 }
 
 //--------------------------------------------------------------------------
