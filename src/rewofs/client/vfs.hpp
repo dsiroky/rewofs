@@ -25,6 +25,20 @@
 namespace rewofs::client {
 //==========================================================================
 
+class IdDispenser
+{
+public:
+    /// Seed for unique identifiers.
+    void set_seed(const uint64_t seed);
+
+    uint64_t get();
+
+private:
+    std::atomic<uint64_t> m_dispenser{};
+};
+
+//==========================================================================
+
 class IVfs
 {
 public:
@@ -66,10 +80,8 @@ private:
 class RemoteVfs : public IVfs, private boost::noncopyable
 {
 public:
-    RemoteVfs(Serializer& serializer, Deserializer& deserializer);
-
-    /// Seed for unique identifiers.
-    void set_seed(const uint64_t seed);
+    RemoteVfs(Serializer& serializer, Deserializer& deserializer,
+              IdDispenser& id_dispenser);
 
     void getattr(const Path& path, struct stat& st) override;
     void readdir(const Path& path, const DirFiller& filler) override;
@@ -104,8 +116,8 @@ private:
 
     Serializer& m_serializer;
     Deserializer& m_deserializer;
+    IdDispenser& m_id_dispenser;
     SingleComm m_comm{m_serializer, m_deserializer};
-    std::atomic<uint64_t> m_open_id_dispenser{};
     std::mutex m_mutex{};
     std::unordered_map<FileHandle, FileParams> m_opened_files{};
 };
@@ -115,7 +127,8 @@ private:
 class CachedVfs:public IVfs
 {
 public:
-    CachedVfs(IVfs& subvfs, Serializer& serializer, Deserializer& deserializer);
+    CachedVfs(IVfs& subvfs, Serializer& serializer, Deserializer& deserializer,
+              IdDispenser& id_dispenser);
 
     /// Prefill the tree.
     void populate_tree();
@@ -143,12 +156,15 @@ private:
 
     struct File
     {
+        int open_flags{};
+        std::optional<FileHandle> subvfs_handle{};
         Path path{};
     };
 
     IVfs& m_subvfs;
     Serializer& m_serializer;
     Deserializer& m_deserializer;
+    IdDispenser& m_id_dispenser;
     SingleComm m_comm{m_serializer, m_deserializer};
     cache::Tree m_tree{};
     cache::Content m_content_cache{};

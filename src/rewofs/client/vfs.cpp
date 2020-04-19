@@ -2,6 +2,10 @@
 ///
 /// @file
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
 #include "rewofs/client/vfs.hpp"
 #include "rewofs/transport.hpp"
 
@@ -35,17 +39,26 @@ void copy(const messages::Stat& src, struct stat& dst)
 } // namespace
 //==========================================================================
 
-RemoteVfs::RemoteVfs(Serializer& serializer, Deserializer& deserializer)
-    : m_serializer{serializer}
-    , m_deserializer{deserializer}
+void IdDispenser::set_seed(const uint64_t seed)
 {
+    m_dispenser = seed;
 }
 
 //--------------------------------------------------------------------------
 
-void RemoteVfs::set_seed(const uint64_t seed)
+uint64_t IdDispenser::get()
 {
-    m_open_id_dispenser = seed;
+    return m_dispenser++;
+}
+
+//==========================================================================
+
+RemoteVfs::RemoteVfs(Serializer& serializer, Deserializer& deserializer,
+                     IdDispenser& id_dispenser)
+    : m_serializer{serializer}
+    , m_deserializer{deserializer}
+    , m_id_dispenser{id_dispenser}
+{
 }
 
 //--------------------------------------------------------------------------
@@ -230,7 +243,7 @@ IVfs::FileHandle RemoteVfs::open_common(const Path& path, const int flags,
                                         const std::optional<mode_t> mode)
 {
     flatbuffers::FlatBufferBuilder fbb{};
-    const auto new_open_id = m_open_id_dispenser++;
+    const auto new_open_id = m_id_dispenser.get();
     const auto msg_path = fbb.CreateString(path.native());
     messages::CommandOpenBuilder cmd_bld{fbb};
     cmd_bld.add_path(msg_path);
@@ -390,10 +403,12 @@ size_t RemoteVfs::write(const FileHandle fh, const gsl::span<const uint8_t> inpu
 
 //==========================================================================
 
-CachedVfs::CachedVfs(IVfs& subvfs, Serializer& serializer, Deserializer& deserializer)
+CachedVfs::CachedVfs(IVfs& subvfs, Serializer& serializer, Deserializer& deserializer,
+                     IdDispenser& id_dispenser)
     : m_subvfs{subvfs}
     , m_serializer{serializer}
     , m_deserializer{deserializer}
+    , m_id_dispenser{id_dispenser}
 {
 }
 
@@ -537,14 +552,15 @@ void CachedVfs::truncate(const Path& path, const off_t length)
 
 IVfs::FileHandle CachedVfs::create(const Path& path, const int flags, const mode_t mode)
 {
-    const auto handle = m_subvfs.create(path, flags, mode);
+    const auto subvfs_handle = m_subvfs.create(path, flags, mode);
 
     struct stat st{};
     m_subvfs.getattr(path, st);
 
     std::lock_guard lg{m_mutex};
     m_tree.make_node(path).st = st;
-    File file{path};
+    File file{flags, subvfs_handle, path};
+    const auto handle = FileHandle{m_id_dispenser.get()};
     m_opened_files.emplace(std::make_pair(handle, std::move(file)));
     return handle;
 }
@@ -553,9 +569,15 @@ IVfs::FileHandle CachedVfs::create(const Path& path, const int flags, const mode
 
 IVfs::FileHandle CachedVfs::open(const Path& path, const int flags)
 {
-    const auto handle = m_subvfs.open(path, flags);
-    File file{path};
+    std::optional<FileHandle> subvfs_handle{};
+    // lazy open on read only
+    if ((flags & O_WRONLY) or (flags & O_RDWR) or (flags & O_APPEND))
+    {
+        subvfs_handle = m_subvfs.open(path, flags);
+    }
+    File file{flags, subvfs_handle, path};
     std::lock_guard lg{m_mutex};
+    const auto handle = FileHandle{m_id_dispenser.get()};
     m_opened_files.emplace(std::make_pair(handle, std::move(file)));
     return handle;
 }
@@ -564,13 +586,22 @@ IVfs::FileHandle CachedVfs::open(const Path& path, const int flags)
 
 void CachedVfs::close(const FileHandle fh)
 {
-    m_subvfs.close(fh);
-    std::lock_guard lg{m_mutex};
+    std::unique_lock lg{m_mutex};
     const auto it = m_opened_files.find(fh);
-    if (it != m_opened_files.end())
+    if (it == m_opened_files.end())
     {
-        m_opened_files.erase(it);
+        throw std::system_error{EBADF, std::generic_category()};
     }
+    const auto subhandle = it->second.subvfs_handle;
+    lg.unlock();
+
+    if (subhandle.has_value())
+    {
+        m_subvfs.close(*subhandle);
+    }
+
+    lg.lock();
+    m_opened_files.erase(it);
 }
 
 //--------------------------------------------------------------------------
@@ -582,7 +613,7 @@ size_t CachedVfs::read(const FileHandle fh, const gsl::span<uint8_t> output,
     const auto it = m_opened_files.find(fh);
     if (it == m_opened_files.end())
     {
-        throw std::system_error{ENOENT, std::generic_category()};
+        throw std::system_error{EBADF, std::generic_category()};
     }
 
     bool has_cached_block = m_content_cache.read(
@@ -592,8 +623,6 @@ size_t CachedVfs::read(const FileHandle fh, const gsl::span<uint8_t> output,
             std::copy(content.begin(), content.end(), output.begin());
         });
 
-    lg.unlock();
-
     if (has_cached_block)
     {
         log_trace("cache hit");
@@ -602,9 +631,17 @@ size_t CachedVfs::read(const FileHandle fh, const gsl::span<uint8_t> output,
     else
     {
         log_trace("cache miss");
-        const auto ret = m_subvfs.read(fh, output, offset);
+        auto subhandle = it->second.subvfs_handle;
+        lg.unlock();
+        if (not subhandle.has_value())
+        {
+            subhandle = m_subvfs.open(it->second.path, it->second.open_flags);
+        }
+        const auto ret = m_subvfs.read(*subhandle, output, offset);
         lg.lock();
-        m_content_cache.write(it->second.path, static_cast<uintmax_t>(offset),
+        const auto refreshed_it = m_opened_files.find(fh);
+        refreshed_it->second.subvfs_handle = subhandle;
+        m_content_cache.write(refreshed_it->second.path, static_cast<uintmax_t>(offset),
                               {output.begin(), output.end()});
         return ret;
     }
@@ -615,10 +652,18 @@ size_t CachedVfs::read(const FileHandle fh, const gsl::span<uint8_t> output,
 size_t CachedVfs::write(const FileHandle fh, const gsl::span<const uint8_t> input,
                         const off_t offset)
 {
-    const auto res = m_subvfs.write(fh, input, offset);
+    std::unique_lock lg{m_mutex};
+    const auto it = m_opened_files.find(fh);
+    if ((it == m_opened_files.end()) or (not it->second.subvfs_handle.has_value()))
+    {
+        throw std::system_error{EBADF, std::generic_category()};
+    }
+    const auto file = it->second;
+    lg.unlock();
 
-    std::lock_guard lg{m_mutex};
-    const auto& file = m_opened_files.at(fh);
+    const auto res = m_subvfs.write(*file.subvfs_handle, input, offset);
+
+    lg.lock();
     auto& node = m_tree.get_node(file.path);
     node.st.st_size = std::max(node.st.st_size, offset + static_cast<off_t>(res));
     m_content_cache.write(file.path, static_cast<uintmax_t>(offset),

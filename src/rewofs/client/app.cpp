@@ -16,7 +16,7 @@ App::App(const boost::program_options::variables_map& options)
     const auto seed = static_cast<uint64_t>(
         std::chrono::steady_clock::now().time_since_epoch().count());
     m_serializer.set_msgid_seed(seed);
-    m_remote_vfs.set_seed(seed);
+    m_id_dispenser.set_seed(seed);
 }
 
 //--------------------------------------------------------------------------
