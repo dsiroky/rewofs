@@ -20,6 +20,34 @@
 namespace rewofs::server {
 //==========================================================================
 
+template<typename T>
+class BlockingQueue
+{
+public:
+    void push(T const& value)
+    {
+        std::unique_lock<std::mutex> lock{m_mutex};
+        m_queue.push_front(value);
+        m_condition.notify_one();
+    }
+
+    T pop()
+    {
+        std::unique_lock<std::mutex> lock{m_mutex};
+        m_condition.wait(lock, [this] { return !m_queue.empty(); });
+        T rc{std::move(m_queue.back())};
+        m_queue.pop_back();
+        return rc;
+    }
+
+private:
+    std::mutex m_mutex{};
+    std::condition_variable m_condition{};
+    std::deque<T> m_queue{};
+};
+
+//==========================================================================
+
 class Worker
 {
 public:
@@ -85,16 +113,24 @@ private:
         process_write(flatbuffers::FlatBufferBuilder& fbb,
                         const messages::CommandWrite& msg);
 
-    /// @return -1 if not found
-    int get_file_descriptor(const uint64_t fh);
+    /// @return <fd, file lock>, fd=-1 if not found
+    std::pair<int, std::unique_lock<std::mutex>> get_file_descriptor(const uint64_t fh);
+
+    struct File
+    {
+        int fd{};
+        /// serialize file IO
+        std::mutex mutex{};
+    };
 
     Transport& m_transport;
-    std::thread m_thread{};
+    BlockingQueue<std::vector<uint8_t>> m_requests_queue{};
+    std::array<std::thread, 10> m_threads{};
     Distributor m_distributor{};
     boost::filesystem::path m_served_directory{};
     std::mutex m_mutex{};
-    /// filehandle:file descriptor
-    std::unordered_map<uint64_t, int> m_opened_files{};
+    /// filehandle:file
+    std::unordered_map<uint64_t, File> m_opened_files{};
 };
 
 //==========================================================================

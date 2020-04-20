@@ -104,7 +104,7 @@ public:
     //--------------------------------
 private:
     // fragment reads/writes to improve remote response
-    static constexpr size_t IO_FRAGMENT_SIZE{1024 * 32};
+    static constexpr size_t IO_FRAGMENT_SIZE{32 * 1024};
 
     struct FileParams
     {

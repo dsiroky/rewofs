@@ -259,6 +259,16 @@ class TestBrowsing(TestClientServer):
 #===========================================================================
 
 class TestIO(TestClientServer):
+    @staticmethod
+    def random_data_for_read():
+        # add a certain pattern for easier debugging
+        IO_FRAGMENT_SIZE = 32 * 1024
+        data = []
+        for i in range(10000000 // IO_FRAGMENT_SIZE):
+            mark = bytes([i % 256]) * 16
+            data.append(mark + os.urandom(IO_FRAGMENT_SIZE - len(mark)))
+        return b''.join(data)
+
     def test_create_open_close(self):
         with open(self.source_dir + "/existing", "w"):
             pass
@@ -280,10 +290,10 @@ class TestIO(TestClientServer):
         self.assertTrue(os.path.isfile(self.source_dir + "/x"))
 
     def test_read_open_separate(self):
-        data1 = os.urandom(10000000)
+        data1 = self.random_data_for_read()
         with open(self.source_dir + "/f1", "wb") as fw:
             fw.write(data1)
-        data2 = os.urandom(10000000)
+        data2 = self.random_data_for_read()
         with open(self.source_dir + "/f2", "wb") as fw:
             fw.write(data2)
 
@@ -295,10 +305,10 @@ class TestIO(TestClientServer):
             self.assertEqual(data2, fr.read())
 
     def test_read_open_together(self):
-        data1 = os.urandom(10000000)
+        data1 = self.random_data_for_read()
         with open(self.source_dir + "/f1", "wb") as fw:
             fw.write(data1)
-        data2 = os.urandom(10000000)
+        data2 = self.random_data_for_read()
         with open(self.source_dir + "/f2", "wb") as fw:
             fw.write(data2)
 
@@ -310,7 +320,7 @@ class TestIO(TestClientServer):
                 self.assertEqual(data2, fr2.read())
 
     def test_random_read(self):
-        data = os.urandom(10000000)
+        data = self.random_data_for_read()
         with open(self.source_dir + "/f", "wb") as fw:
             fw.write(data)
 

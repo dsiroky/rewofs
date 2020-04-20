@@ -123,16 +123,29 @@ Worker::Worker(server::Transport& transport)
 
 void Worker::start()
 {
-    m_thread = std::thread{&Worker::run, this};
+    for (auto& thr: m_threads)
+    {
+        thr = std::thread{&Worker::run, this};
+    }
+
+    for (;;)
+    {
+        m_transport.recv([this](const gsl::span<const uint8_t> buf) {
+            m_requests_queue.push({buf.begin(), buf.end()});
+        });
+    }
 }
 
 //--------------------------------------------------------------------------
 
 void Worker::wait()
 {
-    if (m_thread.joinable())
+    for (auto& thr: m_threads)
     {
-        m_thread.join();
+        if (thr.joinable())
+        {
+            thr.join();
+        }
     }
 }
 
@@ -150,9 +163,8 @@ void Worker::run()
 {
     for (;;)
     {
-        m_transport.recv([this](const gsl::span<const uint8_t> buf) {
-            m_distributor.process_frame(buf);
-        });
+        const auto buf = m_requests_queue.pop();
+        m_distributor.process_frame(buf);
     }
 }
 
@@ -453,23 +465,24 @@ flatbuffers::Offset<messages::ResultErrno>
     {
         std::lock_guard lg{m_mutex};
         assert(m_opened_files.find(msg.file_handle()) == m_opened_files.end());
-        m_opened_files.emplace(std::make_pair(msg.file_handle(), res));
+        m_opened_files[msg.file_handle()].fd = res;
     }
-    assert(get_file_descriptor(msg.file_handle()) == res);
+    assert(get_file_descriptor(msg.file_handle()).first == res);
     return messages::CreateResultErrno(fbb, 0);
 }
 
 //--------------------------------------------------------------------------
 
-int Worker::get_file_descriptor(const uint64_t fh)
+std::pair<int, std::unique_lock<std::mutex>>
+    Worker::get_file_descriptor(const uint64_t fh)
 {
     std::lock_guard lg{m_mutex};
     const auto it = m_opened_files.find(fh);
     if (it == m_opened_files.end())
     {
-        return -1;
+        return std::make_pair(-1, std::unique_lock<std::mutex>{});
     }
-    return it->second;
+    return std::make_pair(it->second.fd, std::unique_lock<std::mutex>{it->second.mutex});
 }
 
 //--------------------------------------------------------------------------
@@ -478,16 +491,19 @@ flatbuffers::Offset<messages::ResultErrno>
     Worker::process_close(flatbuffers::FlatBufferBuilder& fbb,
                           const messages::CommandClose& msg)
 {
-    const auto fd = get_file_descriptor(msg.file_handle());
+    auto [fd, flguard] = get_file_descriptor(msg.file_handle());
 
     const auto res = close(fd);
     log_trace("fd:{} res:{}", fd, res);
+
+    flguard.unlock();
 
     if (res < 0)
     {
         return messages::CreateResultErrno(fbb, errno);
     }
 
+    std::lock_guard lg{m_mutex};
     m_opened_files.erase(m_opened_files.find(msg.file_handle()));
     return messages::CreateResultErrno(fbb, 0);
 }
@@ -498,7 +514,7 @@ flatbuffers::Offset<messages::ResultRead>
     Worker::process_read(flatbuffers::FlatBufferBuilder& fbb,
                          const messages::CommandRead& msg)
 {
-    const auto fd = get_file_descriptor(msg.file_handle());
+    auto [fd, flguard] = get_file_descriptor(msg.file_handle());
 
     const auto new_ofs = lseek(fd, static_cast<off_t>(msg.offset()), SEEK_SET);
     if (new_ofs != static_cast<off_t>(msg.offset()))
@@ -509,6 +525,8 @@ flatbuffers::Offset<messages::ResultRead>
     std::vector<uint8_t> buffer(msg.size());
     const auto res = read(fd, buffer.data(), msg.size());
     log_trace("fd:{} res:{}", fd, res);
+
+    flguard.unlock();
 
     if (res < 0)
     {
@@ -525,7 +543,7 @@ flatbuffers::Offset<messages::ResultWrite>
     Worker::process_write(flatbuffers::FlatBufferBuilder& fbb,
                           const messages::CommandWrite& msg)
 {
-    const auto fd = get_file_descriptor(msg.file_handle());
+    auto [fd, flguard] = get_file_descriptor(msg.file_handle());
 
     const auto new_ofs = lseek(fd, msg.offset(), SEEK_SET);
     if (new_ofs != msg.offset())
@@ -535,6 +553,8 @@ flatbuffers::Offset<messages::ResultWrite>
 
     const auto res = write(fd, msg.data()->data(), msg.data()->size());
     log_trace("fd:{} res:{}", fd, res);
+
+    flguard.unlock();
 
     if (res < 0)
     {
