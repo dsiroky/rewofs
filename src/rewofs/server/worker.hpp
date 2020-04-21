@@ -125,7 +125,7 @@ private:
 
     Transport& m_transport;
     BlockingQueue<std::vector<uint8_t>> m_requests_queue{};
-    std::array<std::thread, 10> m_threads{};
+    std::array<std::thread, 50> m_threads{};
     Distributor m_distributor{};
     boost::filesystem::path m_served_directory{};
     std::mutex m_mutex{};
