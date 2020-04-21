@@ -432,6 +432,8 @@ void CachedVfs::populate_tree()
     std::lock_guard lg{m_mutex};
     m_tree.reset();
     populate_tree(m_tree.get_root(), *message.tree());
+
+    log_info("populating tree done");
 }
 
 //--------------------------------------------------------------------------
