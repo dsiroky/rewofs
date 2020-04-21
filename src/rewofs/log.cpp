@@ -20,7 +20,7 @@ void log_init(const std::string& prefix)
 {
     g_console = spdlog::stdout_color_mt("console");
 #ifdef NDEBUG
-    spdlog::set_level(spdlog::level::warn);
+    spdlog::set_level(spdlog::level::info);
 #else
     spdlog::set_level(spdlog::level::trace);
 #endif
