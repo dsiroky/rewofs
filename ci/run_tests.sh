@@ -1,6 +1,8 @@
 #!/bin/bash
 set -ex
 
+export SCONSFLAGS="-Q -u -j$(nproc)"
+
 scons debug=1
 ./build/last/tests/unit/run
 
