@@ -10,14 +10,15 @@ before_install:
         libboost-filesystem-dev
         libboost-program-options-dev
         libfmt-dev
-        libfuse3-dev
         libgtest-dev
         libnanomsg-dev
         libspdlog-dev
         libzstd-dev
-        fuse3
+        meson
+        ninja-build
         python3-nose2
         scons
     - ci/install_flatbuffers.sh
+    - ci/install_fuse3.sh
 script:
     - ci/run_tests.sh
