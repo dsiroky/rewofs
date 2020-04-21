@@ -515,6 +515,9 @@ void CachedVfs::rename(const Path& old_path, const Path& new_path, const uint32_
     m_subvfs.rename(old_path, new_path, flags);
 
     std::lock_guard lg{m_mutex};
+#ifndef RENAME_EXCHANGE
+    #define RENAME_EXCHANGE (1 << 1)
+#endif
     if (flags & RENAME_EXCHANGE)
     {
         m_tree.exchange(old_path, new_path);

@@ -23,6 +23,54 @@ namespace fs = boost::filesystem;
 namespace {
 //==========================================================================
 
+#ifndef RENAME_EXCHANGE
+#define RENAME_NOREPLACE (1 << 0)
+#define RENAME_EXCHANGE (1 << 1)
+// ugly replacement for older GLIBC
+int renameat2(int olddirfd, const char* oldpath, int newdirfd, const char* newpath,
+              unsigned int flags)
+{
+    if (flags & RENAME_EXCHANGE)
+    {
+        const auto tmp = std::string{oldpath} + ".498560w354df7w";
+        int res{};
+        res = renameat(olddirfd, oldpath, olddirfd, tmp.c_str());
+        if (res != 0)
+        {
+            return res;
+        }
+        res = renameat(newdirfd, newpath, olddirfd, oldpath);
+        if (res != 0)
+        {
+            return res;
+        }
+        res = renameat(olddirfd, tmp.c_str(), newdirfd, newpath);
+        if (res != 0)
+        {
+            return res;
+        }
+        return 0;
+    }
+    else
+    {
+        if (flags & RENAME_NOREPLACE)
+        {
+            if (fs::exists(newpath))
+            {
+                return EEXIST;
+            }
+            return renameat(olddirfd, oldpath, newdirfd, newpath);
+        }
+        else
+        {
+            return renameat(olddirfd, oldpath, newdirfd, newpath);
+        }
+    }
+}
+#endif
+
+//--------------------------------------------------------------------------
+
 void copy(const timespec& src, messages::Time& dst)
 {
     dst.mutate_nsec(src.tv_nsec);
