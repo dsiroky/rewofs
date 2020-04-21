@@ -58,7 +58,7 @@ public:
     virtual void rmdir(const Path& path) = 0;
     virtual void unlink(const Path& path) = 0;
     virtual void symlink(const Path& target, const Path& link_path) = 0;
-    virtual void rename(const Path& old_path, const Path& new_path)
+    virtual void rename(const Path& old_path, const Path& new_path, const uint32_t flags)
         = 0;
     virtual void chmod(const Path& path, const mode_t mode) = 0;
     virtual void truncate(const Path& path, const off_t length) = 0;
@@ -90,7 +90,7 @@ public:
     void rmdir(const Path& path) override;
     void unlink(const Path& path) override;
     void symlink(const Path& target, const Path& link_path) override;
-    void rename(const Path& old_path, const Path& new_path) override;
+    void rename(const Path& old_path, const Path& new_path, const uint32_t flags) override;
     void chmod(const Path& path, const mode_t mode) override;
     void truncate(const Path& path, const off_t length) override;
     FileHandle create(const Path& path, const int flags, const mode_t mode) override;
@@ -133,7 +133,7 @@ public:
     void rmdir(const Path& path) override;
     void unlink(const Path& path) override;
     void symlink(const Path& target, const Path& link_path) override;
-    void rename(const Path& old_path, const Path& new_path) override;
+    void rename(const Path& old_path, const Path& new_path, const uint32_t flags) override;
     void chmod(const Path& path, const mode_t mode) override;
     void truncate(const Path& path, const off_t length) override;
     FileHandle create(const Path& path, const int flags, const mode_t mode) override;

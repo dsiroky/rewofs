@@ -51,7 +51,9 @@ public:
     /// Remove a node only if it has no children.
     void remove_single(const Path& path);
     Node& make_node(const Path& path);
+    /// Fails if `to` exists.
     void rename(const Path& from, const Path& to);
+    void exchange(const Path& node1, const Path& node2);
 
 private:
     Node m_root{};

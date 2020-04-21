@@ -9,6 +9,14 @@
 namespace rewofs::client::cache {
 //==========================================================================
 
+static bool path_has_prefix(const Path& path, const Path& prefix)
+{
+    auto pair = std::mismatch(path.begin(), path.end(), prefix.begin(), prefix.end());
+    return pair.second == prefix.end();
+}
+
+//==========================================================================
+
 Tree::Tree()
 {
     m_root.name = ".";
@@ -114,6 +122,22 @@ void Tree::rename(const Path& from, const Path& to)
         = parent_to.children.emplace(to.filename().string(), std::move(tmp));
     (void) it;
     assert(inserted); (void) inserted;
+}
+
+//--------------------------------------------------------------------------
+
+void Tree::exchange(const Path& path1, const Path& path2)
+{
+    if (path_has_prefix(path1, path2) or path_has_prefix(path2, path1))
+    {
+        throw std::system_error{EINVAL, std::generic_category()};
+    }
+
+    auto& node1 = get_node(path1);
+    auto& node2 = get_node(path2);
+
+    std::swap(node1.st, node2.st);
+    std::swap(node1.children, node2.children);
 }
 
 //--------------------------------------------------------------------------

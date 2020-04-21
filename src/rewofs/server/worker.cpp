@@ -388,8 +388,10 @@ flatbuffers::Offset<messages::ResultErrno>
 {
     const auto old_path = map_path(msg.old_path()->c_str());
     const auto new_path = map_path(msg.new_path()->c_str());
+    const auto flags = msg.flags();
 
-    const auto res = rename(old_path.c_str(), new_path.c_str());
+    const auto res
+        = renameat2(AT_FDCWD, old_path.c_str(), AT_FDCWD, new_path.c_str(), flags);
     log_trace("{}->{} res:{}", old_path.native(), new_path.native(), res);
 
     if (res < 0)
@@ -545,8 +547,8 @@ flatbuffers::Offset<messages::ResultWrite>
 {
     auto [fd, flguard] = get_file_descriptor(msg.file_handle());
 
-    const auto new_ofs = lseek(fd, msg.offset(), SEEK_SET);
-    if (new_ofs != msg.offset())
+    const auto new_ofs = lseek(fd, static_cast<off_t>(msg.offset()), SEEK_SET);
+    if (new_ofs != static_cast<off_t>(msg.offset()))
     {
         return messages::CreateResultWrite(fbb, -1, EIO);
     }

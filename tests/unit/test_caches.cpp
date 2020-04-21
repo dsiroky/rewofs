@@ -46,6 +46,113 @@ TEST(CacheTree, MakeNode_GetNode)
     EXPECT_THROW(tree.get_node("/some/sub2"), std::system_error);
 }
 
+//--------------------------------------------------------------------------
+
+TEST(CacheTree, Exchange)
+{
+    client::cache::Tree tree{};
+    auto& root = tree.get_root();
+    auto& node_a = tree.make_node(root, "node_a");
+    node_a.st.st_size = 100;
+    auto& node_b = tree.make_node(root, "node_b");
+    node_b.st.st_size = 1000;
+
+    tree.exchange("/node_a", "/node_b");
+
+    EXPECT_EQ(tree.get_node("/node_a").st.st_size, 1000);
+    EXPECT_EQ(tree.get_node("/node_b").st.st_size, 100);
+}
+
+//--------------------------------------------------------------------------
+
+TEST(CacheTree, ExchangeRoot)
+{
+    client::cache::Tree tree{};
+    auto& root = tree.get_root();
+    tree.make_node(root, "node_a");
+
+    EXPECT_THROW(tree.exchange("/", "/node_a"), std::exception);
+    EXPECT_THROW(tree.exchange("/node_a", "/"), std::exception);
+}
+
+//--------------------------------------------------------------------------
+
+TEST(CacheTree, ExchangeTheSame)
+{
+    client::cache::Tree tree{};
+    auto& root = tree.get_root();
+    tree.make_node(root, "node_a");
+
+    EXPECT_THROW(tree.exchange("/node_a", "/node_a"), std::exception);
+}
+
+//--------------------------------------------------------------------------
+
+TEST(CacheTree, ExchangeDifferentDirectory)
+{
+    client::cache::Tree tree{};
+    auto& root = tree.get_root();
+    auto& node_a = tree.make_node(root, "node_a");
+    node_a.st.st_size = 100;
+    auto& subdir = tree.make_node(root, "subdir");
+    auto& node_b = tree.make_node(subdir, "node_b");
+    node_b.st.st_size = 1000;
+
+    tree.exchange("/node_a", "/subdir/node_b");
+
+    EXPECT_EQ(tree.get_node("/node_a").st.st_size, 1000);
+    EXPECT_EQ(tree.get_node("/subdir/node_b").st.st_size, 100);
+}
+
+//--------------------------------------------------------------------------
+
+TEST(CacheTree, ExchangeDirectories)
+{
+    client::cache::Tree tree{};
+    auto& root = tree.get_root();
+    auto& subdir_a = tree.make_node(root, "sub_a");
+    auto& node_a = tree.make_node(subdir_a, "node_a");
+    node_a.st.st_size = 100;
+    auto& subdir_b = tree.make_node(root, "sub_b");
+    auto& node_b = tree.make_node(subdir_b, "node_b");
+    node_b.st.st_size = 1000;
+
+    tree.exchange("/sub_a", "/sub_b");
+
+    EXPECT_EQ(tree.get_node("/sub_a/node_b").st.st_size, 1000);
+    EXPECT_EQ(tree.get_node("/sub_b/node_a").st.st_size, 100);
+    EXPECT_THROW(tree.get_node("/sub_a/node_a"), std::exception);
+    EXPECT_THROW(tree.get_node("/sub_b/node_b"), std::exception);
+}
+
+//--------------------------------------------------------------------------
+
+TEST(CacheTree, ExchangeMissing)
+{
+    client::cache::Tree tree{};
+    auto& root = tree.get_root();
+    tree.make_node(root, "node_a");
+
+    EXPECT_THROW(tree.exchange("/nonexistent1", "/nonexistent2"), std::exception);
+    EXPECT_THROW(tree.exchange("/node_a", "/nonexistent"), std::exception);
+    EXPECT_THROW(tree.exchange("/nonexistent", "/node_a"), std::exception);
+}
+
+//--------------------------------------------------------------------------
+
+TEST(CacheTree, ExchangeSubDirectory)
+{
+    client::cache::Tree tree{};
+    auto& root = tree.get_root();
+    auto& s1 = tree.make_node(root, "s1");
+    tree.make_node(s1, "s2");
+
+    EXPECT_THROW(tree.exchange("/", "/s1/s2"), std::exception);
+    EXPECT_THROW(tree.exchange("/s1/s2", "/"), std::exception);
+    EXPECT_THROW(tree.exchange("/s1", "/s1/s2"), std::exception);
+    EXPECT_THROW(tree.exchange("/s1/s2", "/s1"), std::exception);
+}
+
 //==========================================================================
 
 TEST(Content, RW)

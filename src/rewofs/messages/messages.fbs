@@ -98,6 +98,7 @@ table CommandRename
 {
     old_path:string;
     new_path:string;
+    flags:uint32;
 }
 
 table CommandChmod
@@ -143,7 +144,7 @@ table ResultRead
 table CommandWrite
 {
   file_handle:uint64;
-  offset:int64;
+  offset:uint64;
   data:[ubyte];
 }
 table ResultWrite

@@ -187,11 +187,11 @@ void RemoteVfs::symlink(const Path& target, const Path& link_path)
 
 //--------------------------------------------------------------------------
 
-void RemoteVfs::rename(const Path& old_path, const Path& new_path)
+void RemoteVfs::rename(const Path& old_path, const Path& new_path, const uint32_t flags)
 {
     flatbuffers::FlatBufferBuilder fbb{};
     const auto command = messages::CreateCommandRenameDirect(fbb, old_path.c_str(),
-                                                             new_path.c_str());
+                                                             new_path.c_str(), flags);
     const auto res = m_comm.single_command<messages::ResultErrno>(fbb, command);
 
     const auto& message = res.message();
@@ -358,9 +358,9 @@ size_t RemoteVfs::write(const FileHandle fh, const gsl::span<const uint8_t> inpu
         const size_t block_size{std::min(input.size() - block_ofs, IO_FRAGMENT_SIZE)};
 
         flatbuffers::FlatBufferBuilder fbb{};
-        const auto data = fbb.CreateVector(input.data(), input.size());
-        const auto command
-            = messages::CreateCommandWrite(fbb, strong::value_of(fh), offset, data);
+        const auto data = fbb.CreateVector(input.data() + block_ofs, block_size);
+        const auto command = messages::CreateCommandWrite(
+            fbb, strong::value_of(fh), static_cast<size_t>(offset) + block_ofs, data);
         mids.emplace_back(m_serializer.add_command(queue, fbb, command));
         log_trace("mid:{}", strong::value_of(mids.back()));
         block_ofs += block_size;
@@ -510,12 +510,20 @@ void CachedVfs::symlink(const Path& target, const Path& link_path)
 
 //--------------------------------------------------------------------------
 
-void CachedVfs::rename(const Path& old_path, const Path& new_path)
+void CachedVfs::rename(const Path& old_path, const Path& new_path, const uint32_t flags)
 {
-    m_subvfs.rename(old_path, new_path);
+    m_subvfs.rename(old_path, new_path, flags);
 
     std::lock_guard lg{m_mutex};
-    m_tree.rename(old_path, new_path);
+    if (flags & RENAME_EXCHANGE)
+    {
+        m_tree.exchange(old_path, new_path);
+    }
+    else
+    {
+        m_tree.rename(old_path, new_path);
+    }
+    // TODO m_content_cache
 }
 
 //--------------------------------------------------------------------------
@@ -534,6 +542,7 @@ void CachedVfs::truncate(const Path& path, const off_t length)
     m_subvfs.truncate(path, length);
     std::lock_guard lg{m_mutex};
     m_tree.get_node(path).st.st_size = length;
+    // TODO m_content_cache
 }
 
 //--------------------------------------------------------------------------

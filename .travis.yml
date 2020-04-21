@@ -10,11 +10,12 @@ before_install:
         libboost-filesystem-dev
         libboost-program-options-dev
         libfmt-dev
-        libfuse-dev
+        libfuse3-dev
         libgtest-dev
         libnanomsg-dev
         libspdlog-dev
         libzstd-dev
+        fuse3
         python3-nose2
         scons
     - ci/install_flatbuffers.sh

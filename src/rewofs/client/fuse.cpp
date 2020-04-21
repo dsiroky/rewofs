@@ -4,8 +4,8 @@
 
 #include <stdexcept>
 
-#define FUSE_USE_VERSION 26
-#include <fuse.h>
+#define FUSE_USE_VERSION 32
+#include <fuse3/fuse.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -52,7 +52,7 @@ int gen_return_error_code()
 namespace callbacks {
 //==========================================================================
 
-static int getattr(const char *path, struct stat *stbuf) noexcept
+static int getattr(const char* path, struct stat* stbuf, struct fuse_file_info*) noexcept
 {
     log_trace("path:{}", path);
     try
@@ -66,8 +66,8 @@ static int getattr(const char *path, struct stat *stbuf) noexcept
     return 0;
 }
 
-static int readdir(const char *path, void *buf, fuse_fill_dir_t filler,
-			 off_t, struct fuse_file_info *) noexcept
+static int readdir(const char* path, void* buf, fuse_fill_dir_t filler, off_t,
+                   struct fuse_file_info*, fuse_readdir_flags) noexcept
 {
     log_trace("path:{}", path);
     try
@@ -75,7 +75,7 @@ static int readdir(const char *path, void *buf, fuse_fill_dir_t filler,
         g_vfs->readdir(path,
                        [buf, filler](const fs::path& item_path, const struct stat& st) {
                            log_trace("{}", item_path.c_str());
-                           filler(buf, item_path.c_str(), &st, 0);
+                           filler(buf, item_path.c_str(), &st, 0, FUSE_FILL_DIR_PLUS);
                        });
     }
     catch (...)
@@ -158,12 +158,12 @@ static int symlink(const char* target, const char* link_path) noexcept
     return 0;
 }
 
-static int rename(const char* old_path, const char* new_path) noexcept
+static int rename(const char* old_path, const char* new_path, unsigned int flags) noexcept
 {
     log_trace("path:{}->{}", old_path, new_path);
     try
     {
-        g_vfs->rename(old_path, new_path);
+        g_vfs->rename(old_path, new_path, flags);
     }
     catch (...)
     {
@@ -172,7 +172,7 @@ static int rename(const char* old_path, const char* new_path) noexcept
     return 0;
 }
 
-static int chmod(const char* path, const mode_t mode) noexcept
+static int chmod(const char* path, const mode_t mode, struct fuse_file_info*) noexcept
 {
     log_trace("path:{}", path);
     try
@@ -186,7 +186,7 @@ static int chmod(const char* path, const mode_t mode) noexcept
     return 0;
 }
 
-static int truncate(const char* path, const off_t length) noexcept
+static int truncate(const char* path, const off_t length, struct fuse_file_info*) noexcept
 {
     log_trace("path:{}", path);
     try
@@ -310,7 +310,6 @@ Fuse::Fuse(IVfs& vfs)
 
 void Fuse::set_mountpoint(const std::string& path)
 {
-    log_info("mountpoint: {}", m_mountpoint);
     m_mountpoint = path;
 }
 
@@ -337,24 +336,40 @@ void Fuse::run()
 {
     log_info("starting FUSE");
 
-    int res{};
-
-    auto ch = fuse_mount(m_mountpoint.c_str(), nullptr);
-    auto fuse = fuse_new(ch, nullptr, &g_oper, sizeof(g_oper), nullptr);
+    struct fuse_args args{};
+    args.argc = 1;
+    std::string fake_cmd_name{"rewofs"};
+    char* argv[] = {fake_cmd_name.data(), nullptr};
+    args.argc = 1;
+    args.argv = argv;
+    args.allocated = 0;
+    auto fuse = fuse_new(&args, &g_oper, sizeof(g_oper), nullptr);
     if (fuse == nullptr)
     {
+        throw std::runtime_error{"can't init"};
+    }
+
+    log_info("mountpoint: '{}'", m_mountpoint);
+    const auto mount_res = fuse_mount(fuse, m_mountpoint.c_str());
+    if (mount_res == -1)
+    {
+        log_error("errno: {}", errno);
         throw std::runtime_error{"can't mount"};
     }
 
-    res = fuse_set_signal_handlers(fuse_get_session(fuse));
-    if (res == -1)
+    const auto signal_res = fuse_set_signal_handlers(fuse_get_session(fuse));
+    if (signal_res == -1)
     {
         throw std::runtime_error{"can't set signal handlers"};
     }
 
-    fuse_loop_mt(fuse);
+    log_info("looping");
+    fuse_loop_config loop_config{};
+    loop_config.clone_fd = 0;
+    loop_config.max_idle_threads = 10;
+    fuse_loop_mt(fuse, &loop_config);
     log_info("quitting");
-    fuse_unmount(m_mountpoint.c_str(), ch);
+    fuse_unmount(fuse);
 }
 
 //==========================================================================
