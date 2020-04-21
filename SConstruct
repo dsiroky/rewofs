@@ -164,9 +164,6 @@ env.AppendUnique(
         "PROJECT_ROOT=\\\"%s\\\"" % env["PROJECT_ROOT"].replace("\\", "\\\\"),
         "_FILE_OFFSET_BITS=64",
     ],
-)
-
-env.AppendUnique(
     CCFLAGS=[
             "-pipe",
             "-pthread",
@@ -189,7 +186,10 @@ env.AppendUnique(
     LINKFLAGS=[
             "-pthread",
             "-Wl,--gc-sections",
-        ]
+        ],
+    RPATH=[
+            "/usr/local/lib/x86_64-linux-gnu",
+        ],
     )
 
 if "clang" in env["CC"]:
