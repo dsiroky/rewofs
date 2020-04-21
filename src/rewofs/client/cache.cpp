@@ -12,6 +12,8 @@ namespace rewofs::client::cache {
 Tree::Tree()
 {
     m_root.name = ".";
+    // directory with read permissions
+    m_root.st.st_mode = 040444;
 }
 
 //--------------------------------------------------------------------------
