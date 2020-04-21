@@ -106,11 +106,6 @@ private:
     // fragment reads/writes to improve remote response
     static constexpr size_t IO_FRAGMENT_SIZE{32 * 1024};
 
-    struct FileParams
-    {
-        Path path{};
-    };
-
     FileHandle open_common(const Path& path, const int flags,
                            const std::optional<mode_t> mode);
 
@@ -118,8 +113,6 @@ private:
     Deserializer& m_deserializer;
     IdDispenser& m_id_dispenser;
     SingleComm m_comm{m_serializer, m_deserializer};
-    std::mutex m_mutex{};
-    std::unordered_map<FileHandle, FileParams> m_opened_files{};
 };
 
 //==========================================================================

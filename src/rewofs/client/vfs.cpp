@@ -242,6 +242,7 @@ void RemoteVfs::truncate(const Path& path, const off_t length)
 IVfs::FileHandle RemoteVfs::open_common(const Path& path, const int flags,
                                         const std::optional<mode_t> mode)
 {
+    log_trace("opening '{}'", path.native());
     flatbuffers::FlatBufferBuilder fbb{};
     const auto new_open_id = m_id_dispenser.get();
     const auto msg_path = fbb.CreateString(path.native());
@@ -261,10 +262,6 @@ IVfs::FileHandle RemoteVfs::open_common(const Path& path, const int flags,
         throw std::system_error{message.res_errno(), std::generic_category()};
     }
 
-    std::lock_guard lg{m_mutex};
-    FileParams fparams{};
-    fparams.path = path;
-    m_opened_files.emplace(std::make_pair(FileHandle{new_open_id}, fparams));
     log_trace("open fh:{} '{}'", new_open_id, path.native());
     return FileHandle{new_open_id};
 }
@@ -287,13 +284,6 @@ IVfs::FileHandle RemoteVfs::open(const Path& path, const int flags)
 
 void RemoteVfs::close(const FileHandle fh)
 {
-    std::lock_guard lg{m_mutex};
-    const auto it = m_opened_files.find(fh);
-    if (it == m_opened_files.end())
-    {
-        throw std::system_error{EINVAL, std::generic_category()};
-    }
-
     flatbuffers::FlatBufferBuilder fbb{};
     const auto command = messages::CreateCommandClose(fbb, strong::value_of(fh));
     const auto res = m_comm.single_command<messages::ResultErrno>(fbb, command);
@@ -310,8 +300,6 @@ void RemoteVfs::close(const FileHandle fh)
 size_t RemoteVfs::read(const FileHandle fh, const gsl::span<uint8_t> output,
                        const off_t offset)
 {
-    std::lock_guard lg{m_mutex};
-
     auto queue = m_serializer.new_queue(Serializer::PRIORITY_DEFAULT);
     std::vector<MessageId> mids{};
 
@@ -359,8 +347,6 @@ size_t RemoteVfs::read(const FileHandle fh, const gsl::span<uint8_t> output,
 size_t RemoteVfs::write(const FileHandle fh, const gsl::span<const uint8_t> input,
                         const off_t offset)
 {
-    std::lock_guard lg{m_mutex};
-
     auto queue = m_serializer.new_queue(Serializer::PRIORITY_DEFAULT);
     std::vector<MessageId> mids{};
 
