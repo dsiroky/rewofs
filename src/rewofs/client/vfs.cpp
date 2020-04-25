@@ -30,7 +30,6 @@ void copy(const messages::Stat& src, struct stat& dst)
     dst.st_mode = src.st_mode();
     dst.st_nlink = src.st_nlink();
     dst.st_size = src.st_size();
-    copy(src.st_atim(), dst.st_atim);
     copy(src.st_ctim(), dst.st_ctim);
     copy(src.st_mtim(), dst.st_mtim);
 }
@@ -471,7 +470,11 @@ void CachedVfs::mkdir(const Path& path, mode_t mode)
 
     struct stat st{};
     m_subvfs.getattr(path, st);
+    struct stat parent_st{};
+    m_subvfs.getattr(path.parent_path(), parent_st);
+
     std::lock_guard lg{m_mutex};
+    m_tree.get_node(path.parent_path()).st = parent_st;
     auto& new_node = m_tree.make_node(path);
     new_node.st = st;
 }
@@ -481,8 +484,13 @@ void CachedVfs::mkdir(const Path& path, mode_t mode)
 void CachedVfs::rmdir(const Path& path)
 {
     m_subvfs.rmdir(path);
+
+    struct stat parent_st{};
+    m_subvfs.getattr(path.parent_path(), parent_st);
+
     std::lock_guard lg{m_mutex};
     m_tree.remove_single(path);
+    m_tree.get_node(path.parent_path()).st = parent_st;
 }
 
 //--------------------------------------------------------------------------
@@ -490,9 +498,14 @@ void CachedVfs::rmdir(const Path& path)
 void CachedVfs::unlink(const Path& path)
 {
     m_subvfs.unlink(path);
+
+    struct stat parent_st{};
+    m_subvfs.getattr(path.parent_path(), parent_st);
+
     std::lock_guard lg{m_mutex};
     m_tree.remove_single(path);
     m_content_cache.delete_file(path);
+    m_tree.get_node(path.parent_path()).st = parent_st;
 }
 
 //--------------------------------------------------------------------------
@@ -503,9 +516,12 @@ void CachedVfs::symlink(const Path& target, const Path& link_path)
 
     struct stat st{};
     m_subvfs.getattr(link_path, st);
+    struct stat parent_st{};
+    m_subvfs.getattr(link_path.parent_path(), parent_st);
+
     std::lock_guard lg{m_mutex};
-    auto& new_node = m_tree.make_node(link_path);
-    new_node.st = st;
+    m_tree.make_node(link_path).st = st;
+    m_tree.get_node(link_path.parent_path()).st = parent_st;
 }
 
 //--------------------------------------------------------------------------
@@ -543,8 +559,15 @@ void CachedVfs::chmod(const Path& path, const mode_t mode)
 void CachedVfs::truncate(const Path& path, const off_t length)
 {
     m_subvfs.truncate(path, length);
+
+    // TODO let the create command return the stat
+    struct stat st{};
+    m_subvfs.getattr(path, st);
+
     std::lock_guard lg{m_mutex};
-    m_tree.get_node(path).st.st_size = length;
+    auto& node = m_tree.get_node(path);
+    node.st = st;
+
     // TODO m_content_cache
 }
 
@@ -554,6 +577,7 @@ IVfs::FileHandle CachedVfs::create(const Path& path, const int flags, const mode
 {
     const auto subvfs_handle = m_subvfs.create(path, flags, mode);
 
+    // TODO let the create command return the stat
     struct stat st{};
     m_subvfs.getattr(path, st);
 
@@ -664,8 +688,13 @@ size_t CachedVfs::write(const FileHandle fh, const gsl::span<const uint8_t> inpu
     const auto res = m_subvfs.write(*file.subvfs_handle, input, offset);
 
     lg.lock();
+
+    // TODO let the main command return the stat
+    struct stat st{};
+    m_subvfs.getattr(file.path, st);
+
     auto& node = m_tree.get_node(file.path);
-    node.st.st_size = std::max(node.st.st_size, offset + static_cast<off_t>(res));
+    node.st = st;
     m_content_cache.write(file.path, static_cast<uintmax_t>(offset),
                           {input.begin(), input.end()});
 
