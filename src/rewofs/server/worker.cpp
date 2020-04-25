@@ -323,8 +323,9 @@ flatbuffers::Offset<messages::ResultReaddir>
     {
         return messages::CreateResultReaddir(fbb, exc.code().value());
     }
-    catch (...)
+    catch (const std::exception& exc)
     {
+        log_error("{}", exc.what());
         return messages::CreateResultReaddir(fbb, EIO);
     }
 }
@@ -346,8 +347,9 @@ flatbuffers::Offset<messages::ResultReadlink>
     {
         return messages::CreateResultReadlink(fbb, exc.code().value());
     }
-    catch (...)
+    catch (const std::exception& exc)
     {
+        log_error("{}", exc.what());
         return messages::CreateResultReadlink(fbb, EIO);
     }
 }
@@ -569,7 +571,7 @@ flatbuffers::Offset<messages::ResultRead>
     const auto new_ofs = lseek(fd, static_cast<off_t>(msg.offset()), SEEK_SET);
     if (new_ofs != static_cast<off_t>(msg.offset()))
     {
-        return messages::CreateResultReadDirect(fbb, -1, EIO);
+        return messages::CreateResultReadDirect(fbb, -1, static_cast<int>(new_ofs));
     }
 
     std::vector<uint8_t> buffer(msg.size());
@@ -598,7 +600,7 @@ flatbuffers::Offset<messages::ResultWrite>
     const auto new_ofs = lseek(fd, static_cast<off_t>(msg.offset()), SEEK_SET);
     if (new_ofs != static_cast<off_t>(msg.offset()))
     {
-        return messages::CreateResultWrite(fbb, -1, EIO);
+        return messages::CreateResultWrite(fbb, -1, static_cast<int>(new_ofs));
     }
 
     const auto res = write(fd, msg.data()->data(), msg.data()->size());
