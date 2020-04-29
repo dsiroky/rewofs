@@ -28,7 +28,6 @@ void copy(const messages::Time& src, timespec& dst)
 void copy(const messages::Stat& src, struct stat& dst)
 {
     dst.st_mode = src.st_mode();
-    dst.st_nlink = src.st_nlink();
     dst.st_size = src.st_size();
     copy(src.st_ctim(), dst.st_ctim);
     copy(src.st_mtim(), dst.st_mtim);
