@@ -66,6 +66,9 @@ private:
 class Content
 {
 public:
+    /// Delete all content.
+    void reset();
+
     /// @return false if the block was not found
     bool read(const Path& path, const uintmax_t start, const size_t size,
               const std::function<void(const gsl::span<const uint8_t>)> store_cb);

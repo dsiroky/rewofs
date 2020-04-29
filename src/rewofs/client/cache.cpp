@@ -164,6 +164,13 @@ Node& Tree::get_node(const Path& path)
     return *node;
 }
 
+//==========================================================================
+
+void Content::reset()
+{
+    m_blocks.clear();
+}
+
 //--------------------------------------------------------------------------
 
 bool Content::read(const Path& path, const uintmax_t start, const size_t size,
