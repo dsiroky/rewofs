@@ -115,7 +115,7 @@ flatbuffers::Offset<messages::TreeNode>
         if (fs::is_directory(path))
         {
             const auto children
-                = boost::make_iterator_range(fs::directory_iterator(path), {});
+                = boost::make_iterator_range(fs::directory_iterator{path}, {});
             for (const auto& child : children)
             {
                 vec_children.push_back(build_fs_fbb_tree(fbb, child.path()));
@@ -143,8 +143,6 @@ flatbuffers::Offset<messages::TreeNode>
 Worker::Worker(server::Transport& transport)
     : m_transport{transport}
 {
-    m_served_directory = boost::filesystem::current_path();
-
 #define SUB(_Msg, func) \
     m_distributor.subscribe<messages::_Msg>( \
         [this](const MessageId mid, const auto& msg) { \

@@ -124,7 +124,6 @@ private:
     BlockingQueue<std::vector<uint8_t>> m_requests_queue{};
     std::array<std::thread, 50> m_threads{};
     Distributor m_distributor{};
-    boost::filesystem::path m_served_directory{};
     std::mutex m_mutex{};
     /// filehandle:file
     std::unordered_map<uint64_t, File> m_opened_files{};
