@@ -5,6 +5,7 @@ Test server run.
 
 import os
 import posix
+import shutil
 import tempfile
 import threading
 import time
@@ -18,29 +19,13 @@ REWOFS_PROG = os.environ["REWOFS_PROG"]
 
 #===========================================================================
 
-class KillAfterTimeout(object):
-    def __init__(self, process, timeout):
-        """
-        @param timeout [s]
-        """
-        self.process = process
-        self.timer = threading.Timer(timeout, self.kill_him)
-        self.timer.start()
+def write_file(filename, content):
+    with open(filename, "wb") as fw:
+        fw.write(content)
 
-    def __enter__(self):
-        pass
-
-    def __exit__(self, tp, value, traceback):
-        self.cancel()
-
-    def cancel(self):
-        self.timer.cancel()
-
-    def kill_him(self):
-        try:
-            self.process.terminate()
-        except:
-            pass
+def read_file(filename):
+    with open(filename, "rb") as fr:
+        return fr.read()
 
 #===========================================================================
 
@@ -76,12 +61,9 @@ class TestBrowsing(TestClientServer):
         os.makedirs(self.source_dir + "/a/b/c")
         os.makedirs(self.source_dir + "/a/bb")
         os.makedirs(self.source_dir + "/x/y")
-        with open(self.source_dir + "/data", "w") as fw:
-            fw.write("abc")
-        with open(self.source_dir + "/a/b/file", "w"):
-            pass
-        with open(self.source_dir + "/x/bin.box", "w"):
-            pass
+        write_file(self.source_dir + "/data", b"abc")
+        write_file(self.source_dir + "/a/b/file", b"")
+        write_file(self.source_dir + "/x/bin.box", b"")
         os.symlink("hurdygurdy", self.source_dir + "/a/bb/link")
 
         self.run_client()
@@ -121,8 +103,7 @@ class TestBrowsing(TestClientServer):
         os.symlink("a/b/c", self.source_dir + "/lnk2")
         os.symlink("/someroot/a/b/c", self.source_dir + "/lnk3")
         os.symlink("abcd" * 50 + "efgh", self.source_dir + "/lnk4")
-        with open(self.source_dir + "/notlink", "w"):
-            pass
+        write_file(self.source_dir + "/notlink", b"")
 
         self.run_client()
 
@@ -142,8 +123,8 @@ class TestBrowsing(TestClientServer):
         time.sleep(0.2) # affect /a/b mtime
         os.makedirs(self.mount_dir + "/a/b/c")
 
-        self.assertTrue(os.path.isdir(self.source_dir + "/x"));
-        self.assertTrue(os.path.isdir(self.source_dir + "/a/b/c"));
+        self.assertTrue(os.path.isdir(self.source_dir + "/x"))
+        self.assertTrue(os.path.isdir(self.source_dir + "/a/b/c"))
 
         self.assertEqual(os.lstat(self.source_dir + "/x").st_mtime,
                          os.lstat(self.mount_dir + "/x").st_mtime)
@@ -174,10 +155,8 @@ class TestBrowsing(TestClientServer):
     def test_rmdir(self):
         os.makedirs(self.source_dir + "/a/b/c")
         os.makedirs(self.source_dir + "/d")
-        with open(self.source_dir + "/a/b/c/x", "w"):
-            pass
-        with open(self.source_dir + "/y", "w"):
-            pass
+        write_file(self.source_dir + "/a/b/c/x", b"")
+        write_file(self.source_dir + "/y", b"")
 
         self.run_client()
 
@@ -204,10 +183,8 @@ class TestBrowsing(TestClientServer):
     def test_unlink(self):
         os.makedirs(self.source_dir + "/a/b/c")
         os.makedirs(self.source_dir + "/d")
-        with open(self.source_dir + "/a/b/c/x", "w"):
-            pass
-        with open(self.source_dir + "/y", "w"):
-            pass
+        write_file(self.source_dir + "/a/b/c/x", b"")
+        write_file(self.source_dir + "/y", b"")
 
         self.run_client()
 
@@ -250,12 +227,9 @@ class TestBrowsing(TestClientServer):
         os.makedirs(self.source_dir + "/d2")
         os.makedirs(self.source_dir + "/s1")
         os.makedirs(self.source_dir + "/s2")
-        with open(self.source_dir + "/d2/fle", "w"):
-            pass
-        with open(self.source_dir + "/x", "w"):
-            pass
-        with open(self.source_dir + "/x2", "w"):
-            pass
+        write_file(self.source_dir + "/d2/fle", b"")
+        write_file(self.source_dir + "/x", b"")
+        write_file(self.source_dir + "/x2", b"")
         os.makedirs(self.source_dir + "/y/suby")
 
         self.run_client()
@@ -317,8 +291,7 @@ class TestIO(TestClientServer):
         return b''.join(data)
 
     def test_create_open_close(self):
-        with open(self.source_dir + "/existing", "w"):
-            pass
+        write_file(self.source_dir + "/existing", b"")
 
         self.run_client()
 
@@ -343,26 +316,20 @@ class TestIO(TestClientServer):
 
     def test_read_open_separate(self):
         data1 = self.random_data_for_read()
-        with open(self.source_dir + "/f1", "wb") as fw:
-            fw.write(data1)
+        write_file(self.source_dir + "/f1", data1)
         data2 = self.random_data_for_read()
-        with open(self.source_dir + "/f2", "wb") as fw:
-            fw.write(data2)
+        write_file(self.source_dir + "/f2", data2)
 
         self.run_client()
 
-        with open(self.mount_dir + "/f1", "rb") as fr:
-            self.assertEqual(data1, fr.read())
-        with open(self.mount_dir + "/f2", "rb") as fr:
-            self.assertEqual(data2, fr.read())
+        self.assertEqual(data1, read_file(self.mount_dir + "/f1"))
+        self.assertEqual(data2, read_file(self.mount_dir + "/f2"))
 
     def test_read_open_together(self):
         data1 = self.random_data_for_read()
-        with open(self.source_dir + "/f1", "wb") as fw:
-            fw.write(data1)
+        write_file(self.source_dir + "/f1", data1)
         data2 = self.random_data_for_read()
-        with open(self.source_dir + "/f2", "wb") as fw:
-            fw.write(data2)
+        write_file(self.source_dir + "/f2", data2)
 
         self.run_client()
 
@@ -373,8 +340,7 @@ class TestIO(TestClientServer):
 
     def test_random_read(self):
         data = self.random_data_for_read()
-        with open(self.source_dir + "/f", "wb") as fw:
-            fw.write(data)
+        write_file(self.source_dir + "/f", data)
 
         self.run_client()
 
@@ -390,21 +356,17 @@ class TestIO(TestClientServer):
         self.run_client()
 
         data1 = os.urandom(10000000)
-        with open(self.mount_dir + "/f1", "wb") as fw:
-            fw.write(data1)
+        write_file(self.mount_dir + "/f1", data1)
         data2 = os.urandom(10000000)
-        with open(self.mount_dir + "/f2", "wb") as fw:
-            fw.write(data2)
+        write_file(self.mount_dir + "/f2", data2)
 
         self.assertTrue(os.path.isfile(self.mount_dir + "/f1"))
         self.assertEqual(os.path.getsize(self.mount_dir + "/f1"), 10000000)
         self.assertTrue(os.path.isfile(self.mount_dir + "/f2"))
         self.assertEqual(os.path.getsize(self.mount_dir + "/f2"), 10000000)
 
-        with open(self.source_dir + "/f1", "rb") as fr:
-            self.assertEqual(data1, fr.read())
-        with open(self.source_dir + "/f2", "rb") as fr:
-            self.assertEqual(data2, fr.read())
+        self.assertEqual(data1, read_file(self.source_dir + "/f1"))
+        self.assertEqual(data2, read_file(self.source_dir + "/f2"))
 
         self.assertEqual(os.lstat(self.source_dir + "/f1").st_size,
                          os.lstat(self.mount_dir + "/f1").st_size)
@@ -435,10 +397,8 @@ class TestIO(TestClientServer):
         self.assertTrue(os.path.isfile(self.mount_dir + "/f2"))
         self.assertEqual(os.path.getsize(self.mount_dir + "/f2"), 10000000)
 
-        with open(self.source_dir + "/f1", "rb") as fr:
-                self.assertEqual(data1, fr.read())
-        with open(self.source_dir + "/f2", "rb") as fr:
-                self.assertEqual(data2, fr.read())
+        self.assertEqual(data1, read_file(self.source_dir + "/f1"))
+        self.assertEqual(data2, read_file(self.source_dir + "/f2"))
 
         self.assertEqual(os.lstat(self.source_dir + "/f1").st_size,
                          os.lstat(self.mount_dir + "/f1").st_size)
@@ -463,9 +423,8 @@ class TestIO(TestClientServer):
             fw.seek(10000000)
             fw.write(b"123")
 
-        with open(self.source_dir + "/f", "rb") as fr:
-                data = (b'\0' * 1000) + b"abc" + (b'\0' * (10000000 - 1000 - 3)) + b"123"
-                self.assertEqual(data, fr.read())
+        data = (b'\0' * 1000) + b"abc" + (b'\0' * (10000000 - 1000 - 3)) + b"123"
+        self.assertEqual(data, read_file(self.source_dir + "/f"))
 
         self.assertEqual(os.lstat(self.source_dir + "/f").st_size,
                          os.lstat(self.mount_dir + "/f").st_size)
@@ -483,9 +442,8 @@ class TestIO(TestClientServer):
             frw.seek(2000)
             frw.write(b"efg")
 
-        with open(self.source_dir + "/f", "rb") as fr:
-                data = (b'\0' * 1000) + b"abc" + (b'\0' * (1000 - 3)) + b"efg"
-                self.assertEqual(data, fr.read())
+        data = (b'\0' * 1000) + b"abc" + (b'\0' * (1000 - 3)) + b"efg"
+        self.assertEqual(data, read_file(self.source_dir + "/f"))
 
         self.assertEqual(os.lstat(self.source_dir + "/f").st_size,
                          os.lstat(self.mount_dir + "/f").st_size)
@@ -536,3 +494,118 @@ class TestIO(TestClientServer):
                              os.lstat(self.mount_dir + "/f" + sidx).st_size)
             self.assertEqual(os.lstat(self.source_dir + "/f" + sidx).st_mtime,
                              os.lstat(self.mount_dir + "/f" + sidx).st_mtime)
+
+    def test_copy_file(self):
+        with open(self.source_dir + "/f", "wb") as fw:
+            fw.write(b"a" * 1024)
+
+        self.run_client()
+
+        shutil.copyfile(self.mount_dir + "/f", self.mount_dir + "/fcopy")
+
+        self.assertEqual(read_file(self.source_dir + "/fcopy"), b"a" * 1024)
+        self.assertEqual(read_file(self.mount_dir + "/fcopy"), b"a" * 1024)
+
+        self.assertEqual(os.lstat(self.source_dir + "/fcopy").st_ctime,
+                         os.lstat(self.mount_dir + "/fcopy").st_ctime)
+        self.assertEqual(os.lstat(self.source_dir + "/fcopy").st_mtime,
+                         os.lstat(self.mount_dir + "/fcopy").st_mtime)
+
+#===========================================================================
+
+class TestRemoteInvalidations(TestClientServer):
+    """
+    Tree or data modified on the server.
+    """
+
+    def test_mkdir(self):
+        self.run_client()
+
+        os.mkdir(self.source_dir + "/x")
+        os.makedirs(self.source_dir + "/a/b")
+
+        # let it propagate
+        time.sleep(1)
+
+        self.assertTrue(os.path.isdir(self.mount_dir + "/x"))
+        self.assertTrue(os.path.isdir(self.mount_dir + "/a/b"))
+
+        self.assertEqual(os.lstat(self.source_dir + "/x").st_mtime,
+                         os.lstat(self.mount_dir + "/x").st_mtime)
+        self.assertEqual(os.lstat(self.source_dir + "/a/b").st_mtime,
+                         os.lstat(self.mount_dir + "/a/b").st_mtime)
+
+        self.assertEqual(os.lstat(self.source_dir + "/x").st_ctime,
+                         os.lstat(self.mount_dir + "/x").st_ctime)
+        self.assertEqual(os.lstat(self.source_dir + "/a/b").st_ctime,
+                         os.lstat(self.mount_dir + "/a/b").st_ctime)
+
+    def test_rmdir(self):
+        os.mkdir(self.source_dir + "/x")
+        os.makedirs(self.source_dir + "/a/b")
+
+        self.run_client()
+
+        os.rmdir(self.source_dir + "/x")
+        os.rmdir(self.source_dir + "/a/b")
+
+        # let it propagate
+        time.sleep(1)
+
+        self.assertFalse(os.path.exists(self.mount_dir + "/x"))
+        self.assertTrue(os.path.isdir(self.mount_dir + "/a"))
+        self.assertFalse(os.path.exists(self.mount_dir + "/a/b"))
+
+        self.assertEqual(os.lstat(self.source_dir + "/a").st_mtime,
+                         os.lstat(self.mount_dir + "/a").st_mtime)
+
+    def test_unlink(self):
+        with open(self.source_dir + "/f", "wb") as fw:
+            fw.write(b"x")
+        os.mkdir(self.source_dir + "/x")
+        with open(self.source_dir + "/x/f2", "wb") as fw:
+            fw.write(b"y")
+        os.symlink("hurdygurdy", self.source_dir + "/link")
+
+        self.run_client()
+
+        os.unlink(self.source_dir + "/f")
+        os.unlink(self.source_dir + "/x/f2")
+        os.unlink(self.source_dir + "/link")
+
+        # let it propagate
+        time.sleep(1)
+
+        self.assertFalse(os.path.exists(self.mount_dir + "/f"))
+        self.assertFalse(os.path.exists(self.mount_dir + "/x/f2"))
+        self.assertFalse(os.path.exists(self.mount_dir + "/link"))
+
+        self.assertEqual(os.lstat(self.source_dir + "/x").st_mtime,
+                         os.lstat(self.mount_dir + "/x").st_mtime)
+
+    def test_create_symlink(self):
+        self.run_client()
+
+        os.symlink("hurdygurdy", self.source_dir + "/link")
+
+        # let it propagate
+        time.sleep(1)
+
+        self.assertTrue(os.path.islink(self.mount_dir + "/link"))
+
+        self.assertEqual(os.lstat(self.source_dir + "/link").st_ctime,
+                         os.lstat(self.mount_dir + "/link").st_ctime)
+
+    def test_create_file(self):
+        self.run_client()
+
+        with open(self.source_dir + "/f", "wb") as fw:
+            fw.write("g")
+
+        # let it propagate
+        time.sleep(1)
+
+        self.assertTrue(os.path.islink(self.mount_dir + "/link"))
+
+        self.assertEqual(os.lstat(self.source_dir + "/link").st_ctime,
+                         os.lstat(self.mount_dir + "/link").st_ctime)
