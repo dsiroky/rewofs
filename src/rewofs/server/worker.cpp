@@ -11,6 +11,7 @@
 #include "rewofs/enablewarnings.hpp"
 
 #include "rewofs/log.hpp"
+#include "rewofs/server/path.hpp"
 #include "rewofs/server/worker.hpp"
 
 //==========================================================================
@@ -195,14 +196,6 @@ void Worker::wait()
             thr.join();
         }
     }
-}
-
-//--------------------------------------------------------------------------
-
-boost::filesystem::path Worker::map_path(const boost::filesystem::path& relative)
-{
-    // TODO check for out-of-direcotory values like ".."
-    return fs::absolute(fs::path{"./"} / relative).lexically_normal();
 }
 
 //--------------------------------------------------------------------------

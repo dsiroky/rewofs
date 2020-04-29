@@ -59,9 +59,6 @@ public:
 private:
     void run();
 
-    /// @return a host path from a relative path to the served directory
-    static boost::filesystem::path map_path(const boost::filesystem::path& relative);
-
     template<typename _Msg, typename _ProcFunc>
     void process_message(const MessageId mid, const _Msg& msg, _ProcFunc proc);
     flatbuffers::Offset<messages::Pong>
