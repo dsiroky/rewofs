@@ -13,19 +13,21 @@
 namespace rewofs {
 //==========================================================================
 
-std::vector<BreadthDirectoryItem> breadth_first_tree(const boost::filesystem::path& root_path)
+std::vector<BreadthDirectoryItem>
+    breadth_first_tree(const boost::filesystem::path& root_path)
 {
     namespace fs = boost::filesystem;
 
     std::vector<BreadthDirectoryItem> list{};
-    BreadthDirectoryItem root{fs::directory_entry{root_path, fs::status(root_path)}, 0};
+    BreadthDirectoryItem root{
+        fs::directory_entry{root_path, fs::symlink_status(root_path)}, 0};
     list.push_back(std::move(root));
 
     size_t current_idx{0};
     while (current_idx < list.size())
     {
         auto& parent = list[current_idx];
-        if (parent.entry.status().type() == fs::directory_file)
+        if (parent.entry.symlink_status().type() == fs::directory_file)
         {
             std::vector<BreadthDirectoryItem> tmp_list{};
             const auto children = boost::make_iterator_range(
@@ -33,7 +35,8 @@ std::vector<BreadthDirectoryItem> breadth_first_tree(const boost::filesystem::pa
             for (const auto& child : children)
             {
                 BreadthDirectoryItem child_item{
-                    fs::directory_entry{std::move(child.path()), child.status()}, 0};
+                    fs::directory_entry{std::move(child.path()), child.symlink_status()},
+                    0};
                 tmp_list.push_back(std::move(child_item));
             }
 

@@ -89,7 +89,7 @@ flatbuffers::Offset<messages::TreeNode>
     std::vector<flatbuffers::Offset<messages::TreeNode>> vec_children{};
     try
     {
-        if (fs::is_directory(path))
+        if (not fs::is_symlink(path) and fs::is_directory(path))
         {
             const auto children
                 = boost::make_iterator_range(fs::directory_iterator{path}, {});
@@ -305,7 +305,7 @@ flatbuffers::Offset<messages::ResultReaddir>
             const auto fs_item_path = itr->path().filename();
             const auto item_path = fbb.CreateString(fs_item_path.native());
             struct stat st{};
-            const auto res = stat(fs_item_path.c_str(), &st);
+            const auto res = lstat(fs_item_path.c_str(), &st);
             if (res == 0)
             {
                 messages::Stat msg_st{};
