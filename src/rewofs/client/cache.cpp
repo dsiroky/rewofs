@@ -280,7 +280,10 @@ Node& Cache::make_node(const Path& path)
 void Cache::rename(const Path& from, const Path& to)
 {
     m_tree.rename(from, to);
-    // TODO content
+    // now: naive solution
+    // TODO: rename paths in the cache
+    m_content.delete_file(from);
+    m_content.delete_file(to);
 }
 
 //--------------------------------------------------------------------------
@@ -288,7 +291,10 @@ void Cache::rename(const Path& from, const Path& to)
 void Cache::exchange(const Path& node1, const Path& node2)
 {
     m_tree.exchange(node1, node2);
-    // TODO content
+    // now: naive solution
+    // TODO: exchange paths in the cache
+    m_content.delete_file(node1);
+    m_content.delete_file(node2);
 }
 
 //--------------------------------------------------------------------------
