@@ -136,6 +136,7 @@ Worker::Worker(server::Transport& transport, TemporalIgnores& temporal_ignores)
     SUB(CommandSymlink, process_symlink);
     SUB(CommandRename, process_rename);
     SUB(CommandChmod, process_chmod);
+    SUB(CommandUtime, process_utime);
     SUB(CommandTruncate, process_truncate);
     SUB(CommandOpen, process_open);
     SUB(CommandClose, process_close);
@@ -470,6 +471,29 @@ flatbuffers::Offset<messages::ResultErrno>
     const auto path = map_path(msg.path()->c_str());
 
     const auto res = chmod(path.c_str(), msg.mode());
+    log_trace("{} res:{}", path.native(), res);
+
+    if (res < 0)
+    {
+        return messages::CreateResultErrno(fbb, errno);
+    }
+
+    return messages::CreateResultErrno(fbb, 0);
+}
+
+//--------------------------------------------------------------------------
+
+flatbuffers::Offset<messages::ResultErrno>
+    Worker::process_utime(flatbuffers::FlatBufferBuilder& fbb,
+                          const messages::CommandUtime& msg)
+{
+    temporal_ignore(msg.path()->str());
+    const auto path = map_path(msg.path()->c_str());
+
+    struct timespec tv[2]{};
+    tv[0].tv_nsec = UTIME_OMIT;
+    copy(*msg.mtime(), tv[1]);
+    const auto res = utimensat(AT_FDCWD, path.c_str(), tv, 0);
     log_trace("{} res:{}", path.native(), res);
 
     if (res < 0)

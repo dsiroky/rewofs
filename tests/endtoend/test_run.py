@@ -275,8 +275,7 @@ class TestBrowsing(TestClientServer):
                          os.lstat(self.mount_dir + "/d3").st_mtime)
 
     def test_chmod(self):
-        with open(self.source_dir + "/x", "w"):
-            pass
+        write_file(self.source_dir + "/x", b"")
 
         self.run_client()
 
@@ -287,6 +286,18 @@ class TestBrowsing(TestClientServer):
         os.chmod(self.mount_dir + "/x", 0o741)
         self.assertEqual(os.lstat(self.source_dir + "/x").st_mode & 0o777, 0o741)
         self.assertEqual(os.lstat(self.mount_dir + "/x").st_mode & 0o777, 0o741)
+
+    def test_utime(self):
+        write_file(self.source_dir + "/x", b"")
+
+        self.run_client()
+
+        orig_mtime = os.lstat(self.source_dir + "/x").st_mtime
+        os.utime(self.mount_dir + "/x", (1000000, 1000000))
+        self.assertNotEqual(orig_mtime,
+                         os.lstat(self.mount_dir + "/x").st_mtime)
+        self.assertEqual(os.lstat(self.source_dir + "/x").st_mtime,
+                         os.lstat(self.mount_dir + "/x").st_mtime)
 
 #===========================================================================
 

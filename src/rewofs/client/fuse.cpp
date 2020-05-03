@@ -186,6 +186,21 @@ static int chmod(const char* path, const mode_t mode, struct fuse_file_info*) no
     return 0;
 }
 
+static int utimens(const char* path, const struct timespec tv[2],
+                   struct fuse_file_info*) noexcept
+{
+    log_trace("path:{}", path);
+    try
+    {
+        g_vfs->utimens(path, tv);
+    }
+    catch (...)
+    {
+        return gen_return_error_code();
+    }
+    return 0;
+}
+
 static int truncate(const char* path, const off_t length, struct fuse_file_info*) noexcept
 {
     log_trace("path:{}", path);
@@ -298,6 +313,7 @@ Fuse::Fuse(IVfs& vfs)
     g_oper.symlink = callbacks::symlink;
     g_oper.rename = callbacks::rename;
     g_oper.chmod = callbacks::chmod;
+    g_oper.utimens = callbacks::utimens;
     g_oper.truncate = callbacks::truncate;
     g_oper.create = callbacks::create;
     g_oper.open = callbacks::open;

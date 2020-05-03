@@ -105,6 +105,12 @@ table CommandChmod
     mode:uint32;
 }
 
+table CommandUtime
+{
+    path:string;
+    mtime:Time;
+}
+
 table CommandTruncate
 {
     path:string;

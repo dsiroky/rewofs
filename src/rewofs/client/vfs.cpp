@@ -193,6 +193,24 @@ void RemoteVfs::chmod(const Path& path, const mode_t mode)
 
 //--------------------------------------------------------------------------
 
+void RemoteVfs::utimens(const Path& path, const struct timespec tv[2])
+{
+    flatbuffers::FlatBufferBuilder fbb{};
+    // work only with mtime
+    messages::Time mtime{};
+    copy(tv[1], mtime);
+    const auto command = messages::CreateCommandUtimeDirect(fbb, path.c_str(), &mtime);
+    const auto res = m_comm.single_command<messages::ResultErrno>(fbb, command);
+
+    const auto& message = res.message();
+    if (message.res_errno() != 0)
+    {
+        throw std::system_error{message.res_errno(), std::generic_category()};
+    }
+}
+
+//--------------------------------------------------------------------------
+
 void RemoteVfs::truncate(const Path& path, const off_t length)
 {
     if (length < 0)
@@ -490,6 +508,16 @@ void CachedVfs::chmod(const Path& path, const mode_t mode)
     m_subvfs.chmod(path, mode);
     auto lg = m_cache.lock();
     m_cache.get_node(path).st.st_mode = mode;
+}
+
+//--------------------------------------------------------------------------
+
+void CachedVfs::utimens(const Path& path, const struct timespec tv[2])
+{
+    m_subvfs.utimens(path, tv);
+    auto lg = m_cache.lock();
+    // work only with mtime
+    m_cache.get_node(path).st.st_mtim = tv[1];
 }
 
 //--------------------------------------------------------------------------

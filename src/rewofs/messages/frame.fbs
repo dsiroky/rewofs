@@ -23,6 +23,7 @@ union Message
     CommandSymlink,
     CommandRename,
     CommandChmod,
+    CommandUtime,
     CommandTruncate,
     CommandOpen,
     CommandClose,

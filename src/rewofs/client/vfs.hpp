@@ -61,6 +61,7 @@ public:
     virtual void rename(const Path& old_path, const Path& new_path, const uint32_t flags)
         = 0;
     virtual void chmod(const Path& path, const mode_t mode) = 0;
+    virtual void utimens(const Path& path, const struct timespec tv[2]) = 0;
     virtual void truncate(const Path& path, const off_t length) = 0;
     virtual FileHandle create(const Path& path, const int flags, const mode_t mode) = 0;
     virtual FileHandle open(const Path& path, const int flags) = 0;
@@ -92,6 +93,7 @@ public:
     void symlink(const Path& target, const Path& link_path) override;
     void rename(const Path& old_path, const Path& new_path, const uint32_t flags) override;
     void chmod(const Path& path, const mode_t mode) override;
+    void utimens(const Path& path, const struct timespec tv[2]) override;
     void truncate(const Path& path, const off_t length) override;
     FileHandle create(const Path& path, const int flags, const mode_t mode) override;
     FileHandle open(const Path& path, const int flags) override;
@@ -132,6 +134,7 @@ public:
     void symlink(const Path& target, const Path& link_path) override;
     void rename(const Path& old_path, const Path& new_path, const uint32_t flags) override;
     void chmod(const Path& path, const mode_t mode) override;
+    void utimens(const Path& path, const struct timespec tv[2]) override;
     void truncate(const Path& path, const off_t length) override;
     FileHandle create(const Path& path, const int flags, const mode_t mode) override;
     FileHandle open(const Path& path, const int flags) override;

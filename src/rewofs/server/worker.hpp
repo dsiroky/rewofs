@@ -135,6 +135,9 @@ private:
         process_chmod(flatbuffers::FlatBufferBuilder& fbb,
                         const messages::CommandChmod& msg);
     flatbuffers::Offset<messages::ResultErrno>
+        process_utime(flatbuffers::FlatBufferBuilder& fbb,
+                        const messages::CommandUtime& msg);
+    flatbuffers::Offset<messages::ResultErrno>
         process_truncate(flatbuffers::FlatBufferBuilder& fbb,
                         const messages::CommandTruncate& msg);
     flatbuffers::Offset<messages::ResultErrno>
