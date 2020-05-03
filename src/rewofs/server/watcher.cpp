@@ -79,7 +79,14 @@ void Watcher::run()
         };
         if (not inotifytools_watch_recursively(WATCH_PATH.c_str(), EVENTS))
         {
-            log_critical("{}", strerror(inotifytools_error()));
+            if (inotifytools_error() == ENOSPC)
+            {
+                log_critical("increase fs.inotify.max_user_watches");
+            }
+            else
+            {
+                log_critical("{}", strerror(inotifytools_error()));
+            }
             break;
         }
         inotify_event* event{nullptr};
