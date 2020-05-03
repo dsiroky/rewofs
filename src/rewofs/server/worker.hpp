@@ -15,6 +15,7 @@
 
 #include "rewofs/transport.hpp"
 #include "rewofs/server/transport.hpp"
+#include "rewofs/server/watcher.hpp"
 
 //==========================================================================
 namespace rewofs::server {
@@ -71,15 +72,32 @@ private:
 class Worker
 {
 public:
-    Worker(server::Transport& transport);
+    Worker(server::Transport& transport, TemporalIgnores& temporal_ignores);
 
     void start();
     void stop();
     void wait();
 
 private:
+    struct File
+    {
+        int fd{};
+        std::string path{};
+        /// serialize file IO
+        std::mutex mutex{};
+    };
+
+    struct FileRef
+    {
+        int fd{};
+        std::optional<std::reference_wrapper<std::string>> path{};
+
+        bool is_valid() const { return fd >= 0; }
+    };
+
     void recv_loop();
     void run();
+    void temporal_ignore(const std::string& path);
 
     template<typename _Msg, typename _ProcFunc>
     void process_message(const MessageId mid, const _Msg& msg, _ProcFunc proc);
@@ -132,17 +150,10 @@ private:
         process_write(flatbuffers::FlatBufferBuilder& fbb,
                         const messages::CommandWrite& msg);
 
-    /// @return <fd, file lock>, fd=-1 if not found
-    std::pair<int, std::unique_lock<std::mutex>> get_file_descriptor(const uint64_t fh);
-
-    struct File
-    {
-        int fd{};
-        /// serialize file IO
-        std::mutex mutex{};
-    };
+    std::pair<FileRef, std::unique_lock<std::mutex>> get_file_descriptor(const uint64_t fh);
 
     Transport& m_transport;
+    TemporalIgnores& m_temporal_ignores;
     std::atomic<bool> m_quit{false};
     BlockingQueue<std::vector<uint8_t>> m_requests_queue{};
     std::thread m_recv_thread{};

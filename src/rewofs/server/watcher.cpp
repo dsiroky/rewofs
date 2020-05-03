@@ -24,8 +24,46 @@ namespace fs = boost::filesystem;
 
 //==========================================================================
 
-Watcher::Watcher(server::Transport& transport)
+TemporalIgnores::TemporalIgnores(const std::chrono::milliseconds ignore_duration)
+    : m_ignore_duration{ignore_duration}
+{
+}
+
+//--------------------------------------------------------------------------
+
+void TemporalIgnores::add(const std::chrono::steady_clock::time_point now, Path path)
+{
+    std::lock_guard lg{m_mutex};
+    m_items.push_back({now, std::move(path)});
+
+    /// Items should be sorted by a timestamp.
+    assert(std::is_sorted(m_items.begin(), m_items.end(),
+                          [](const auto& i1, const auto& i2) { return i1.tp < i2.tp; }));
+}
+
+//--------------------------------------------------------------------------
+
+bool TemporalIgnores::check(const std::chrono::steady_clock::time_point now, const Path& path)
+{
+    std::lock_guard lg{m_mutex};
+
+    // delete obsolete items
+    const auto old_time = now - m_ignore_duration;
+    m_items.erase(
+        std::remove_if(m_items.begin(), m_items.end(),
+                       [old_time](const auto& item) { return item.tp < old_time; }),
+        m_items.end());
+
+    return std::find_if(m_items.begin(), m_items.end(),
+                        [&path](const auto& item) { return path == item.path; })
+           != m_items.end();
+}
+
+//==========================================================================
+
+Watcher::Watcher(server::Transport& transport, TemporalIgnores& temporal_ignores)
     : m_transport{transport}
+    , m_temporal_ignores{temporal_ignores}
 {
 }
 
@@ -102,6 +140,11 @@ void Watcher::run()
         const auto normalized
             = (Path{"/"} / inotifytools_filename_from_wd(event->wd) / event->name)
                   .lexically_normal();
+        if (m_temporal_ignores.check(std::chrono::steady_clock::now(), normalized))
+        {
+            log_trace("inotify ignored '{}' {}", normalized.native(), event->mask);
+            continue;
+        }
         log_trace("inotify '{}' {}", normalized.native(), event->mask);
         //inotifytools_printf( event, "%T %w%f %e\n" );
 

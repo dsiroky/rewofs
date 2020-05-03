@@ -117,8 +117,8 @@ flatbuffers::Offset<messages::TreeNode>
 } // namespace
 //==========================================================================
 
-Worker::Worker(server::Transport& transport)
-    : m_transport{transport}
+Worker::Worker(server::Transport& transport, TemporalIgnores& temporal_ignores)
+    : m_transport{transport}, m_temporal_ignores{temporal_ignores}
 {
 #define SUB(_Msg, func) \
     m_distributor.subscribe<messages::_Msg>( \
@@ -209,6 +209,13 @@ void Worker::run()
             break;
         }
     }
+}
+
+//--------------------------------------------------------------------------
+
+void Worker::temporal_ignore(const std::string& path)
+{
+    m_temporal_ignores.add(std::chrono::steady_clock::now(), path);
 }
 
 //--------------------------------------------------------------------------
@@ -355,6 +362,7 @@ flatbuffers::Offset<messages::ResultErrno>
     Worker::process_mkdir(flatbuffers::FlatBufferBuilder& fbb,
                           const messages::CommandMkdir& msg)
 {
+    temporal_ignore(msg.path()->str());
     const auto path = map_path(msg.path()->c_str());
 
     const auto res = mkdir(path.c_str(), msg.mode());
@@ -374,6 +382,7 @@ flatbuffers::Offset<messages::ResultErrno>
     Worker::process_rmdir(flatbuffers::FlatBufferBuilder& fbb,
                           const messages::CommandRmdir& msg)
 {
+    temporal_ignore(msg.path()->str());
     const auto path = map_path(msg.path()->c_str());
 
     const auto res = rmdir(path.c_str());
@@ -393,6 +402,7 @@ flatbuffers::Offset<messages::ResultErrno>
     Worker::process_unlink(flatbuffers::FlatBufferBuilder& fbb,
                           const messages::CommandUnlink& msg)
 {
+    temporal_ignore(msg.path()->str());
     const auto path = map_path(msg.path()->c_str());
 
     const auto res = unlink(path.c_str());
@@ -412,6 +422,7 @@ flatbuffers::Offset<messages::ResultErrno>
     Worker::process_symlink(flatbuffers::FlatBufferBuilder& fbb,
                           const messages::CommandSymlink& msg)
 {
+    temporal_ignore(msg.link_path()->str());
     const auto link_path = map_path(msg.link_path()->c_str());
 
     const auto res = symlink(msg.target()->c_str(), link_path.c_str());
@@ -431,6 +442,8 @@ flatbuffers::Offset<messages::ResultErrno>
     Worker::process_rename(flatbuffers::FlatBufferBuilder& fbb,
                            const messages::CommandRename& msg)
 {
+    temporal_ignore(msg.old_path()->str());
+    temporal_ignore(msg.new_path()->str());
     const auto old_path = map_path(msg.old_path()->c_str());
     const auto new_path = map_path(msg.new_path()->c_str());
     const auto flags = msg.flags();
@@ -453,6 +466,7 @@ flatbuffers::Offset<messages::ResultErrno>
     Worker::process_chmod(flatbuffers::FlatBufferBuilder& fbb,
                           const messages::CommandChmod& msg)
 {
+    temporal_ignore(msg.path()->str());
     const auto path = map_path(msg.path()->c_str());
 
     const auto res = chmod(path.c_str(), msg.mode());
@@ -472,6 +486,7 @@ flatbuffers::Offset<messages::ResultErrno>
     Worker::process_truncate(flatbuffers::FlatBufferBuilder& fbb,
                              const messages::CommandTruncate& msg)
 {
+    temporal_ignore(msg.path()->str());
     const auto path = map_path(msg.path()->c_str());
 
     const auto res = truncate(path.c_str(), static_cast<off_t>(msg.lenght()));
@@ -491,6 +506,7 @@ flatbuffers::Offset<messages::ResultErrno>
     Worker::process_open(flatbuffers::FlatBufferBuilder& fbb,
                           const messages::CommandOpen& msg)
 {
+    temporal_ignore(msg.path()->str());
     const auto path = map_path(msg.path()->c_str());
 
     int res{-1};
@@ -514,22 +530,23 @@ flatbuffers::Offset<messages::ResultErrno>
         assert(m_opened_files.find(msg.file_handle()) == m_opened_files.end());
         m_opened_files[msg.file_handle()].fd = res;
     }
-    assert(get_file_descriptor(msg.file_handle()).first == res);
+    assert(get_file_descriptor(msg.file_handle()).first.fd == res);
     return messages::CreateResultErrno(fbb, 0);
 }
 
 //--------------------------------------------------------------------------
 
-std::pair<int, std::unique_lock<std::mutex>>
+std::pair<Worker::FileRef, std::unique_lock<std::mutex>>
     Worker::get_file_descriptor(const uint64_t fh)
 {
     std::lock_guard lg{m_mutex};
     const auto it = m_opened_files.find(fh);
     if (it == m_opened_files.end())
     {
-        return std::make_pair(-1, std::unique_lock<std::mutex>{});
+        return std::make_pair(FileRef{-1, std::nullopt}, std::unique_lock<std::mutex>{});
     }
-    return std::make_pair(it->second.fd, std::unique_lock<std::mutex>{it->second.mutex});
+    return std::make_pair(FileRef{it->second.fd, it->second.path},
+                          std::unique_lock<std::mutex>{it->second.mutex});
 }
 
 //--------------------------------------------------------------------------
@@ -538,10 +555,15 @@ flatbuffers::Offset<messages::ResultErrno>
     Worker::process_close(flatbuffers::FlatBufferBuilder& fbb,
                           const messages::CommandClose& msg)
 {
-    auto [fd, flguard] = get_file_descriptor(msg.file_handle());
+    auto [file_ref, flguard] = get_file_descriptor(msg.file_handle());
 
-    const auto res = close(fd);
-    log_trace("fd:{} res:{}", fd, res);
+    if (file_ref.is_valid())
+    {
+        temporal_ignore(*file_ref.path);
+    }
+
+    const auto res = close(file_ref.fd);
+    log_trace("fd:{} res:{}", file_ref.fd, res);
 
     flguard.unlock();
 
@@ -561,17 +583,17 @@ flatbuffers::Offset<messages::ResultRead>
     Worker::process_read(flatbuffers::FlatBufferBuilder& fbb,
                          const messages::CommandRead& msg)
 {
-    auto [fd, flguard] = get_file_descriptor(msg.file_handle());
+    auto [file_ref, flguard] = get_file_descriptor(msg.file_handle());
 
-    const auto new_ofs = lseek(fd, static_cast<off_t>(msg.offset()), SEEK_SET);
+    const auto new_ofs = lseek(file_ref.fd, static_cast<off_t>(msg.offset()), SEEK_SET);
     if (new_ofs != static_cast<off_t>(msg.offset()))
     {
         return messages::CreateResultReadDirect(fbb, -1, static_cast<int>(new_ofs));
     }
 
     std::vector<uint8_t> buffer(msg.size());
-    const auto res = read(fd, buffer.data(), msg.size());
-    log_trace("fd:{} res:{}", fd, res);
+    const auto res = read(file_ref.fd, buffer.data(), msg.size());
+    log_trace("fd:{} res:{}", file_ref.fd, res);
 
     flguard.unlock();
 
@@ -590,16 +612,21 @@ flatbuffers::Offset<messages::ResultWrite>
     Worker::process_write(flatbuffers::FlatBufferBuilder& fbb,
                           const messages::CommandWrite& msg)
 {
-    auto [fd, flguard] = get_file_descriptor(msg.file_handle());
+    auto [file_ref, flguard] = get_file_descriptor(msg.file_handle());
 
-    const auto new_ofs = lseek(fd, static_cast<off_t>(msg.offset()), SEEK_SET);
+    if (file_ref.is_valid())
+    {
+        temporal_ignore(*file_ref.path);
+    }
+
+    const auto new_ofs = lseek(file_ref.fd, static_cast<off_t>(msg.offset()), SEEK_SET);
     if (new_ofs != static_cast<off_t>(msg.offset()))
     {
         return messages::CreateResultWrite(fbb, -1, static_cast<int>(new_ofs));
     }
 
-    const auto res = write(fd, msg.data()->data(), msg.data()->size());
-    log_trace("fd:{} res:{}", fd, res);
+    const auto res = write(file_ref.fd, msg.data()->data(), msg.data()->size());
+    log_trace("fd:{} res:{}", file_ref.fd, res);
 
     flguard.unlock();
 

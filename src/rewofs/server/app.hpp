@@ -32,8 +32,9 @@ private:
 
     const boost::program_options::variables_map& m_options;
     server::Transport m_transport{};
-    Watcher m_watcher{m_transport};
-    Worker m_worker{m_transport};
+    TemporalIgnores m_temporal_ignores{std::chrono::seconds{1}};
+    Watcher m_watcher{m_transport, m_temporal_ignores};
+    Worker m_worker{m_transport, m_temporal_ignores};
 };
 
 //==========================================================================
