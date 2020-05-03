@@ -398,6 +398,7 @@ void CachedVfs::getattr(const Path& path, struct stat& st)
 {
     auto lg = m_cache.lock();
     st = m_cache.get_node(path).st;
+    log_info("{} {} {}", path.native(), st.st_mtim.tv_sec, st.st_mtim.tv_nsec);
 }
 
 //--------------------------------------------------------------------------
@@ -514,10 +515,22 @@ void CachedVfs::chmod(const Path& path, const mode_t mode)
 
 void CachedVfs::utimens(const Path& path, const struct timespec tv[2])
 {
-    m_subvfs.utimens(path, tv);
-    auto lg = m_cache.lock();
     // work only with mtime
-    m_cache.get_node(path).st.st_mtim = tv[1];
+
+    if (tv[1].tv_nsec == UTIME_OMIT)
+    {
+        return;
+    }
+
+    m_subvfs.utimens(path, tv);
+
+    // for UTIME_NOW we need to get the precise remote time, can't just use tv[1]
+    // TODO let the command return the stat
+    struct stat st{};
+    m_subvfs.getattr(path, st);
+
+    auto lg = m_cache.lock();
+    m_cache.get_node(path).st = st;
 }
 
 //--------------------------------------------------------------------------

@@ -292,12 +292,9 @@ class TestBrowsing(TestClientServer):
 
         self.run_client()
 
-        orig_mtime = os.lstat(self.source_dir + "/x").st_mtime
         os.utime(self.mount_dir + "/x", (1000000, 1000000))
-        self.assertNotEqual(orig_mtime,
-                         os.lstat(self.mount_dir + "/x").st_mtime)
-        self.assertEqual(os.lstat(self.source_dir + "/x").st_mtime,
-                         os.lstat(self.mount_dir + "/x").st_mtime)
+        self.assertEqual(os.lstat(self.source_dir + "/x").st_mtime, 1000000);
+        self.assertEqual(os.lstat(self.mount_dir + "/x").st_mtime, 1000000);
 
 #===========================================================================
 

@@ -189,7 +189,8 @@ static int chmod(const char* path, const mode_t mode, struct fuse_file_info*) no
 static int utimens(const char* path, const struct timespec tv[2],
                    struct fuse_file_info*) noexcept
 {
-    log_trace("path:{}", path);
+    log_trace("path:{} {}/{} {}/{}", path, tv[0].tv_sec, tv[0].tv_nsec, tv[1].tv_sec,
+              tv[1].tv_nsec);
     try
     {
         g_vfs->utimens(path, tv);
