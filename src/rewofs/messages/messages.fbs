@@ -156,7 +156,7 @@ table ResultErrno
     res_errno:int32;
 }
 
-/// Served directory was changed localy.
+/// Something was changed localy.
 table NotifyChanged
 {
 }
