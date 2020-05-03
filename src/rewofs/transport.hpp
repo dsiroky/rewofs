@@ -179,6 +179,7 @@ void Distributor::subscribe(std::function<void(const MessageId, const _Msg&)> ca
 
 //==========================================================================
 
+/// Wait for replies with a particular message ID.
 class Deserializer : private boost::noncopyable
 {
 public:

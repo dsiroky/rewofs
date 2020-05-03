@@ -18,7 +18,7 @@ namespace rewofs::client {
 class Heartbeat
 {
 public:
-    Heartbeat(Serializer& serializer, Deserializer& deserializer, CachedVfs& vfs);
+    Heartbeat(Serializer& serializer, Deserializer& deserializer, BackgroundLoader& loader);
     void start();
     void stop();
     void wait();
@@ -30,7 +30,7 @@ private:
 
     Serializer& m_serializer;
     Deserializer& m_deserializer;
-    CachedVfs& m_vfs;
+    BackgroundLoader& m_loader;
     std::thread m_runner{};
     std::atomic<bool> m_quit{false};
     Serializer::QueueRef m_queue{m_serializer.new_queue(Serializer::PRIORITY_HIGH)};

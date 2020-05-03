@@ -27,6 +27,15 @@ def read_file(filename):
     with open(filename, "rb") as fr:
         return fr.read()
 
+def random_data_for_read():
+    # add a certain pattern for easier debugging
+    IO_FRAGMENT_SIZE = 32 * 1024
+    data = []
+    for i in range(10000000 // IO_FRAGMENT_SIZE):
+        mark = bytes([i % 256]) * 16
+        data.append(mark + os.urandom(IO_FRAGMENT_SIZE - len(mark)))
+    return b''.join(data)
+
 #===========================================================================
 
 class TestClientServer(unittest.TestCase):
@@ -51,7 +60,9 @@ class TestClientServer(unittest.TestCase):
     def tearDown(self):
         if self.client is not None:
             self.client.kill()
+            self.client.wait()
         self.server.kill()
+        self.server.wait()
         os.system("fusermount -u " + self.mount_dir)
 
 #===========================================================================
@@ -280,16 +291,6 @@ class TestBrowsing(TestClientServer):
 #===========================================================================
 
 class TestIO(TestClientServer):
-    @staticmethod
-    def random_data_for_read():
-        # add a certain pattern for easier debugging
-        IO_FRAGMENT_SIZE = 32 * 1024
-        data = []
-        for i in range(10000000 // IO_FRAGMENT_SIZE):
-            mark = bytes([i % 256]) * 16
-            data.append(mark + os.urandom(IO_FRAGMENT_SIZE - len(mark)))
-        return b''.join(data)
-
     def test_create_open_close(self):
         write_file(self.source_dir + "/existing", b"")
 
@@ -315,9 +316,9 @@ class TestIO(TestClientServer):
                          os.lstat(self.mount_dir + "/x").st_mtime)
 
     def test_read_open_separate(self):
-        data1 = self.random_data_for_read()
+        data1 = random_data_for_read()
         write_file(self.source_dir + "/f1", data1)
-        data2 = self.random_data_for_read()
+        data2 = random_data_for_read()
         write_file(self.source_dir + "/f2", data2)
 
         self.run_client()
@@ -326,9 +327,9 @@ class TestIO(TestClientServer):
         self.assertEqual(data2, read_file(self.mount_dir + "/f2"))
 
     def test_read_open_together(self):
-        data1 = self.random_data_for_read()
+        data1 = random_data_for_read()
         write_file(self.source_dir + "/f1", data1)
-        data2 = self.random_data_for_read()
+        data2 = random_data_for_read()
         write_file(self.source_dir + "/f2", data2)
 
         self.run_client()
@@ -339,7 +340,7 @@ class TestIO(TestClientServer):
                 self.assertEqual(data2, fr2.read())
 
     def test_random_read(self):
-        data = self.random_data_for_read()
+        data = random_data_for_read()
         write_file(self.source_dir + "/f", data)
 
         self.run_client()
@@ -522,35 +523,31 @@ class TestRemoteInvalidations(TestClientServer):
         self.run_client()
 
         os.mkdir(self.source_dir + "/x")
-        os.makedirs(self.source_dir + "/a/b")
+        os.makedirs(self.source_dir + "/a/b/c/d")
 
         # let it propagate
-        time.sleep(1)
+        time.sleep(3)
 
         self.assertTrue(os.path.isdir(self.mount_dir + "/x"))
         self.assertTrue(os.path.isdir(self.mount_dir + "/a/b"))
 
-        self.assertEqual(os.lstat(self.source_dir + "/x").st_mtime,
-                         os.lstat(self.mount_dir + "/x").st_mtime)
-        self.assertEqual(os.lstat(self.source_dir + "/a/b").st_mtime,
-                         os.lstat(self.mount_dir + "/a/b").st_mtime)
-
-        self.assertEqual(os.lstat(self.source_dir + "/x").st_ctime,
-                         os.lstat(self.mount_dir + "/x").st_ctime)
-        self.assertEqual(os.lstat(self.source_dir + "/a/b").st_ctime,
-                         os.lstat(self.mount_dir + "/a/b").st_ctime)
+        for dn in ("/x", "/a", "/a/b", "/a/b/c", "/a/b/c/d"):
+            self.assertEqual(os.lstat(self.source_dir + dn).st_mtime,
+                             os.lstat(self.mount_dir + dn).st_mtime)
+            self.assertEqual(os.lstat(self.source_dir + dn).st_ctime,
+                             os.lstat(self.mount_dir + dn).st_ctime)
 
     def test_rmdir(self):
         os.mkdir(self.source_dir + "/x")
-        os.makedirs(self.source_dir + "/a/b")
+        os.makedirs(self.source_dir + "/a/b/c/d")
 
         self.run_client()
 
         os.rmdir(self.source_dir + "/x")
-        os.rmdir(self.source_dir + "/a/b")
+        shutil.rmtree(self.source_dir + "/a/b")
 
         # let it propagate
-        time.sleep(1)
+        time.sleep(3)
 
         self.assertFalse(os.path.exists(self.mount_dir + "/x"))
         self.assertTrue(os.path.isdir(self.mount_dir + "/a"))
@@ -574,7 +571,7 @@ class TestRemoteInvalidations(TestClientServer):
         os.unlink(self.source_dir + "/link")
 
         # let it propagate
-        time.sleep(1)
+        time.sleep(3)
 
         self.assertFalse(os.path.exists(self.mount_dir + "/f"))
         self.assertFalse(os.path.exists(self.mount_dir + "/x/f2"))
@@ -589,23 +586,58 @@ class TestRemoteInvalidations(TestClientServer):
         os.symlink("hurdygurdy", self.source_dir + "/link")
 
         # let it propagate
-        time.sleep(1)
+        time.sleep(3)
 
         self.assertTrue(os.path.islink(self.mount_dir + "/link"))
 
         self.assertEqual(os.lstat(self.source_dir + "/link").st_ctime,
                          os.lstat(self.mount_dir + "/link").st_ctime)
+        self.assertEqual(os.readlink(self.mount_dir + "/link"), "hurdygurdy")
 
     def test_create_file(self):
         self.run_client()
 
         with open(self.source_dir + "/f", "wb") as fw:
-            fw.write("g")
+            fw.write(b"g")
 
         # let it propagate
-        time.sleep(1)
+        time.sleep(3)
 
-        self.assertTrue(os.path.islink(self.mount_dir + "/link"))
+        self.assertTrue(os.path.isfile(self.mount_dir + "/f"))
 
-        self.assertEqual(os.lstat(self.source_dir + "/link").st_ctime,
-                         os.lstat(self.mount_dir + "/link").st_ctime)
+        self.assertEqual(os.lstat(self.source_dir + "/f").st_ctime,
+                         os.lstat(self.mount_dir + "/f").st_ctime)
+        self.assertEqual(os.lstat(self.source_dir + "/f").st_mtime,
+                         os.lstat(self.mount_dir + "/f").st_mtime)
+        self.assertEqual(os.lstat(self.source_dir + "/f").st_size,
+                         os.lstat(self.mount_dir + "/f").st_size)
+
+    def test_read_remotely_written(self):
+        self.run_client()
+
+        data = random_data_for_read()
+        with open(self.source_dir + "/f", "wb") as fw:
+            fw.write(data)
+
+        # let it propagate
+        time.sleep(3)
+
+        self.assertTrue(read_file(self.mount_dir + "/f"), data)
+
+    def test_read_invalidated_written(self):
+        data_pre = random_data_for_read()
+        with open(self.source_dir + "/f", "wb") as fw:
+            fw.write(data_pre)
+
+        self.run_client()
+
+        read_file(self.mount_dir + "/f")
+
+        data_post = random_data_for_read()
+        with open(self.source_dir + "/f", "wb") as fw:
+            fw.write(data_post)
+
+        # let it propagate
+        time.sleep(3)
+
+        self.assertTrue(read_file(self.mount_dir + "/f"), data_post)

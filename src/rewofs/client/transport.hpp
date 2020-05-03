@@ -18,7 +18,8 @@ namespace rewofs::client {
 class Transport
 {
 public:
-    Transport(Serializer& serializer, Deserializer& deserializer);
+    Transport(Serializer& serializer, Deserializer& deserializer,
+              Distributor& distributor);
 
     void set_endpoint(const std::string& endpoint);
     void start();
@@ -31,6 +32,7 @@ private:
 
     Serializer& m_serializer;
     Deserializer& m_deserializer;
+    Distributor& m_distributor;
     int m_socket{-1};
     std::thread m_reader{};
     std::thread m_writer{};

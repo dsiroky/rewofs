@@ -11,6 +11,7 @@ before_install:
         libboost-program-options-dev
         libfmt-dev
         libgtest-dev
+        libinotifytools0-dev
         libnanomsg-dev
         libspdlog-dev
         libzstd-dev

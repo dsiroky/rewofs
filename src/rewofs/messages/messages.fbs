@@ -113,24 +113,24 @@ table CommandTruncate
 
 table CommandOpen
 {
-  path:string;
-  file_handle:uint64;
-  flags:int32;
-  /// true means use a mode value
-  set_mode:bool;
-  mode:uint32;
+    path:string;
+    file_handle:uint64;
+    flags:int32;
+    /// true means use a mode value
+    set_mode:bool;
+    mode:uint32;
 }
 
 table CommandClose
 {
-  file_handle:uint64;
+    file_handle:uint64;
 }
 
 table CommandRead
 {
-  file_handle:uint64;
-  offset:uint64;
-  size:uint64;
+    file_handle:uint64;
+    offset:uint64;
+    size:uint64;
 }
 table ResultRead
 {
@@ -141,9 +141,9 @@ table ResultRead
 
 table CommandWrite
 {
-  file_handle:uint64;
-  offset:uint64;
-  data:[ubyte];
+    file_handle:uint64;
+    offset:uint64;
+    data:[ubyte];
 }
 table ResultWrite
 {
@@ -154,4 +154,9 @@ table ResultWrite
 table ResultErrno
 {
     res_errno:int32;
+}
+
+/// Served directory was changed localy.
+table NotifyChanged
+{
 }

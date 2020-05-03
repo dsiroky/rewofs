@@ -6,8 +6,9 @@
 #ifndef CACHE_HPP__NCBG14HO
 #define CACHE_HPP__NCBG14HO
 
-#include <string>
 #include <map>
+#include <mutex>
+#include <string>
 
 #include <sys/stat.h>
 
@@ -43,11 +44,12 @@ class Tree
 public:
     Tree();
 
+    /// Drop the whole tree.
+    void reset();
+
     Node& get_root();
     Node& make_node(Node& parent, const std::string& name);
     Node& get_node(const Path& name);
-    /// Drop the whole tree.
-    void reset();
     /// Remove a node only if it has no children.
     void remove_single(const Path& path);
     Node& make_node(const Path& path);
@@ -71,7 +73,7 @@ public:
 
     /// @return false if the block was not found
     bool read(const Path& path, const uintmax_t start, const size_t size,
-              const std::function<void(const gsl::span<const uint8_t>)> store_cb);
+              const std::function<void(const gsl::span<const uint8_t>)>& store_cb);
     void write(const Path& path, const uintmax_t start, std::vector<uint8_t> content);
     /// Delete all blocks related to the path.
     void delete_file(const Path& path);
@@ -85,6 +87,32 @@ private:
     };
 
     std::deque<Block> m_blocks{};
+};
+
+//==========================================================================
+
+/// Wrapper around Tree and Content
+class Cache
+{
+public:
+    std::unique_lock<std::mutex> lock();
+    void reset();
+
+    Node& get_root();
+    Node& make_node(Node& parent, const std::string& name);
+    Node& get_node(const Path& name);
+    void remove_single(const Path& path);
+    Node& make_node(const Path& path);
+    void rename(const Path& from, const Path& to);
+    void exchange(const Path& node1, const Path& node2);
+    bool read(const Path& path, const uintmax_t start, const size_t size,
+              const std::function<void(const gsl::span<const uint8_t>)>& store_cb);
+    void write(const Path& path, const uintmax_t start, std::vector<uint8_t> content);
+
+private:
+    cache::Tree m_tree{};
+    cache::Content m_content{};
+    std::mutex m_mutex{};
 };
 
 //==========================================================================

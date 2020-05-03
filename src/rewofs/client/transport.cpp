@@ -15,9 +15,11 @@
 namespace rewofs::client {
 //==========================================================================
 
-Transport::Transport(Serializer& serializer, Deserializer& deserializer)
+Transport::Transport(Serializer& serializer, Deserializer& deserializer,
+                     Distributor& distributor)
     : m_serializer{serializer}
     , m_deserializer{deserializer}
+    , m_distributor{distributor}
 {
     m_socket = nanomsg::check("nn_socket", nn_socket(AF_SP, NN_PAIR));
 
@@ -85,7 +87,9 @@ void Transport::run_reader()
     while (not m_quit)
     {
         nanomsg::receive(m_socket, [this](const gsl::span<const uint8_t> buf) {
-            m_deserializer.process_frame(decompress(buf));
+            const auto plain = decompress(buf);
+            m_deserializer.process_frame(plain);
+            m_distributor.process_frame(plain);
         });
     }
 }

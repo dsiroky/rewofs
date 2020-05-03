@@ -7,34 +7,11 @@
 #include <fcntl.h>
 
 #include "rewofs/client/vfs.hpp"
+#include "rewofs/messages.hpp"
 #include "rewofs/transport.hpp"
 
 //==========================================================================
 namespace rewofs::client {
-//==========================================================================
-
-//==========================================================================
-namespace {
-//==========================================================================
-
-void copy(const messages::Time& src, timespec& dst)
-{
-    dst.tv_nsec = src.nsec();
-    dst.tv_sec = src.sec();
-}
-
-//--------------------------------------------------------------------------
-
-void copy(const messages::Stat& src, struct stat& dst)
-{
-    dst.st_mode = src.st_mode();
-    dst.st_size = src.st_size();
-    copy(src.st_ctim(), dst.st_ctim);
-    copy(src.st_mtim(), dst.st_mtim);
-}
-
-//==========================================================================
-} // namespace
 //==========================================================================
 
 void IdDispenser::set_seed(const uint64_t seed)
@@ -388,66 +365,29 @@ size_t RemoteVfs::write(const FileHandle fh, const gsl::span<const uint8_t> inpu
 //==========================================================================
 
 CachedVfs::CachedVfs(IVfs& subvfs, Serializer& serializer, Deserializer& deserializer,
-                     IdDispenser& id_dispenser)
+                     IdDispenser& id_dispenser, cache::Cache& cache)
     : m_subvfs{subvfs}
     , m_serializer{serializer}
     , m_deserializer{deserializer}
     , m_id_dispenser{id_dispenser}
+    , m_cache{cache}
 {
-}
-
-//--------------------------------------------------------------------------
-
-void CachedVfs::populate_tree()
-{
-    log_info("populating tree");
-
-    flatbuffers::FlatBufferBuilder fbb{};
-    const auto command = messages::CreateCommandReadTreeDirect(fbb, "/");
-    const auto res = m_comm.single_command<messages::ResultReadTree>(
-        fbb, command, std::chrono::seconds{60});
-
-    const auto& message = res.message();
-    if (message.res_errno() != 0)
-    {
-        throw std::system_error{message.res_errno(), std::generic_category()};
-    }
-
-    std::lock_guard lg{m_mutex};
-    m_content_cache.reset();
-    m_tree.reset();
-    populate_tree(m_tree.get_root(), *message.tree());
-
-    log_info("populating tree done");
-}
-
-//--------------------------------------------------------------------------
-
-void CachedVfs::populate_tree(cache::Node& node, const messages::TreeNode& fbb_node)
-{
-    node.name = fbb_node.name()->str();
-    copy(*fbb_node.st(), node.st);
-    for (const auto& child: *fbb_node.children())
-    {
-        auto& new_child = m_tree.make_node(node, child->name()->str());
-        populate_tree(new_child, *child);
-    }
 }
 
 //--------------------------------------------------------------------------
 
 void CachedVfs::getattr(const Path& path, struct stat& st)
 {
-    std::lock_guard lg{m_mutex};
-    st = m_tree.get_node(path).st;
+    auto lg = m_cache.lock();
+    st = m_cache.get_node(path).st;
 }
 
 //--------------------------------------------------------------------------
 
 void CachedVfs::readdir(const Path& path, const DirFiller& filler)
 {
-    std::lock_guard lg{m_mutex};
-    const auto& node = m_tree.get_node(path);
+    auto lg = m_cache.lock();
+    const auto& node = m_cache.get_node(path);
 
     for (const auto& [name, child]: node.children)
     {
@@ -473,9 +413,9 @@ void CachedVfs::mkdir(const Path& path, mode_t mode)
     struct stat parent_st{};
     m_subvfs.getattr(path.parent_path(), parent_st);
 
-    std::lock_guard lg{m_mutex};
-    m_tree.get_node(path.parent_path()).st = parent_st;
-    auto& new_node = m_tree.make_node(path);
+    auto lg = m_cache.lock();
+    m_cache.get_node(path.parent_path()).st = parent_st;
+    auto& new_node = m_cache.make_node(path);
     new_node.st = st;
 }
 
@@ -488,9 +428,9 @@ void CachedVfs::rmdir(const Path& path)
     struct stat parent_st{};
     m_subvfs.getattr(path.parent_path(), parent_st);
 
-    std::lock_guard lg{m_mutex};
-    m_tree.remove_single(path);
-    m_tree.get_node(path.parent_path()).st = parent_st;
+    auto lg = m_cache.lock();
+    m_cache.remove_single(path);
+    m_cache.get_node(path.parent_path()).st = parent_st;
 }
 
 //--------------------------------------------------------------------------
@@ -502,10 +442,9 @@ void CachedVfs::unlink(const Path& path)
     struct stat parent_st{};
     m_subvfs.getattr(path.parent_path(), parent_st);
 
-    std::lock_guard lg{m_mutex};
-    m_tree.remove_single(path);
-    m_content_cache.delete_file(path);
-    m_tree.get_node(path.parent_path()).st = parent_st;
+    auto lg = m_cache.lock();
+    m_cache.remove_single(path);
+    m_cache.get_node(path.parent_path()).st = parent_st;
 }
 
 //--------------------------------------------------------------------------
@@ -519,9 +458,9 @@ void CachedVfs::symlink(const Path& target, const Path& link_path)
     struct stat parent_st{};
     m_subvfs.getattr(link_path.parent_path(), parent_st);
 
-    std::lock_guard lg{m_mutex};
-    m_tree.make_node(link_path).st = st;
-    m_tree.get_node(link_path.parent_path()).st = parent_st;
+    auto lg = m_cache.lock();
+    m_cache.make_node(link_path).st = st;
+    m_cache.get_node(link_path.parent_path()).st = parent_st;
 }
 
 //--------------------------------------------------------------------------
@@ -530,19 +469,18 @@ void CachedVfs::rename(const Path& old_path, const Path& new_path, const uint32_
 {
     m_subvfs.rename(old_path, new_path, flags);
 
-    std::lock_guard lg{m_mutex};
+    auto lg = m_cache.lock();
 #ifndef RENAME_EXCHANGE
     #define RENAME_EXCHANGE (1 << 1)
 #endif
     if (flags & RENAME_EXCHANGE)
     {
-        m_tree.exchange(old_path, new_path);
+        m_cache.exchange(old_path, new_path);
     }
     else
     {
-        m_tree.rename(old_path, new_path);
+        m_cache.rename(old_path, new_path);
     }
-    // TODO m_content_cache
 }
 
 //--------------------------------------------------------------------------
@@ -550,8 +488,8 @@ void CachedVfs::rename(const Path& old_path, const Path& new_path, const uint32_
 void CachedVfs::chmod(const Path& path, const mode_t mode)
 {
     m_subvfs.chmod(path, mode);
-    std::lock_guard lg{m_mutex};
-    m_tree.get_node(path).st.st_mode = mode;
+    auto lg = m_cache.lock();
+    m_cache.get_node(path).st.st_mode = mode;
 }
 
 //--------------------------------------------------------------------------
@@ -564,11 +502,9 @@ void CachedVfs::truncate(const Path& path, const off_t length)
     struct stat st{};
     m_subvfs.getattr(path, st);
 
-    std::lock_guard lg{m_mutex};
-    auto& node = m_tree.get_node(path);
+    auto lg = m_cache.lock();
+    auto& node = m_cache.get_node(path);
     node.st = st;
-
-    // TODO m_content_cache
 }
 
 //--------------------------------------------------------------------------
@@ -581,8 +517,8 @@ IVfs::FileHandle CachedVfs::create(const Path& path, const int flags, const mode
     struct stat st{};
     m_subvfs.getattr(path, st);
 
-    std::lock_guard lg{m_mutex};
-    m_tree.make_node(path).st = st;
+    auto lg = m_cache.lock();
+    m_cache.make_node(path).st = st;
     File file{flags, subvfs_handle, path};
     const auto handle = FileHandle{m_id_dispenser.get()};
     m_opened_files.emplace(std::make_pair(handle, std::move(file)));
@@ -600,7 +536,7 @@ IVfs::FileHandle CachedVfs::open(const Path& path, const int flags)
         subvfs_handle = m_subvfs.open(path, flags);
     }
     File file{flags, subvfs_handle, path};
-    std::lock_guard lg{m_mutex};
+    auto lg = m_cache.lock();
     const auto handle = FileHandle{m_id_dispenser.get()};
     m_opened_files.emplace(std::make_pair(handle, std::move(file)));
     return handle;
@@ -610,7 +546,7 @@ IVfs::FileHandle CachedVfs::open(const Path& path, const int flags)
 
 void CachedVfs::close(const FileHandle fh)
 {
-    std::unique_lock lg{m_mutex};
+    auto lg = m_cache.lock();
     const auto it = m_opened_files.find(fh);
     if (it == m_opened_files.end())
     {
@@ -633,14 +569,14 @@ void CachedVfs::close(const FileHandle fh)
 size_t CachedVfs::read(const FileHandle fh, const gsl::span<uint8_t> output,
                        const off_t offset)
 {
-    std::unique_lock lg{m_mutex};
+    auto lg = m_cache.lock();
     const auto it = m_opened_files.find(fh);
     if (it == m_opened_files.end())
     {
         throw std::system_error{EBADF, std::generic_category()};
     }
 
-    bool has_cached_block = m_content_cache.read(
+    bool has_cached_block = m_cache.read(
         it->second.path, static_cast<uintmax_t>(offset), output.size(),
         [&output](const auto& content) {
             assert(content.size() == output.size());
@@ -665,8 +601,8 @@ size_t CachedVfs::read(const FileHandle fh, const gsl::span<uint8_t> output,
         lg.lock();
         const auto refreshed_it = m_opened_files.find(fh);
         refreshed_it->second.subvfs_handle = subhandle;
-        m_content_cache.write(refreshed_it->second.path, static_cast<uintmax_t>(offset),
-                              {output.begin(), output.end()});
+        m_cache.write(refreshed_it->second.path, static_cast<uintmax_t>(offset),
+                      {output.begin(), output.end()});
         return ret;
     }
 }
@@ -676,7 +612,7 @@ size_t CachedVfs::read(const FileHandle fh, const gsl::span<uint8_t> output,
 size_t CachedVfs::write(const FileHandle fh, const gsl::span<const uint8_t> input,
                         const off_t offset)
 {
-    std::unique_lock lg{m_mutex};
+    auto lg = m_cache.lock();
     const auto it = m_opened_files.find(fh);
     if ((it == m_opened_files.end()) or (not it->second.subvfs_handle.has_value()))
     {
@@ -693,12 +629,106 @@ size_t CachedVfs::write(const FileHandle fh, const gsl::span<const uint8_t> inpu
     struct stat st{};
     m_subvfs.getattr(file.path, st);
 
-    auto& node = m_tree.get_node(file.path);
+    auto& node = m_cache.get_node(file.path);
     node.st = st;
-    m_content_cache.write(file.path, static_cast<uintmax_t>(offset),
-                          {input.begin(), input.end()});
+    m_cache.write(file.path, static_cast<uintmax_t>(offset),
+                  {input.begin(), input.end()});
 
     return res;
+}
+
+//==========================================================================
+
+BackgroundLoader::BackgroundLoader(Serializer& serializer, Deserializer& deserializer,
+                                   Distributor& distributor, cache::Cache& cache)
+    : m_serializer{serializer}
+    , m_deserializer{deserializer}
+    , m_distributor{distributor}
+    , m_cache{cache}
+{
+#define SUB(_Msg, func) \
+    m_distributor.subscribe<messages::_Msg>( \
+        [this](const MessageId, const auto& msg) { \
+            BackgroundLoader::func(msg); \
+        });
+    SUB(NotifyChanged, process_remote_changed);
+}
+
+//--------------------------------------------------------------------------
+
+void BackgroundLoader::start()
+{
+    m_tree_loader_thread = std::thread{&BackgroundLoader::tree_loader, this};
+}
+
+//--------------------------------------------------------------------------
+
+void BackgroundLoader::invalidate_tree()
+{
+    m_tree_invalidated = true;
+    m_cv.notify_one();
+}
+
+//--------------------------------------------------------------------------
+
+void BackgroundLoader::populate_tree()
+{
+    log_info("populating tree");
+
+    flatbuffers::FlatBufferBuilder fbb{};
+    const auto command = messages::CreateCommandReadTreeDirect(fbb, "/");
+    const auto res = m_comm.single_command<messages::ResultReadTree>(
+        fbb, command, std::chrono::seconds{60});
+
+    const auto& message = res.message();
+    if (message.res_errno() != 0)
+    {
+        throw std::system_error{message.res_errno(), std::generic_category()};
+    }
+
+    auto lg = m_cache.lock();
+    m_cache.reset();
+    populate_tree(m_cache.get_root(), *message.tree());
+
+    log_info("populating tree done");
+}
+
+//--------------------------------------------------------------------------
+
+void BackgroundLoader::populate_tree(cache::Node& node, const messages::TreeNode& fbb_node)
+{
+    node.name = fbb_node.name()->str();
+    copy(*fbb_node.st(), node.st);
+    for (const auto& child: *fbb_node.children())
+    {
+        auto& new_child = m_cache.make_node(node, child->name()->str());
+        populate_tree(new_child, *child);
+    }
+}
+
+//--------------------------------------------------------------------------
+
+void BackgroundLoader::process_remote_changed(const messages::NotifyChanged&)
+{
+    invalidate_tree();
+}
+
+//--------------------------------------------------------------------------
+
+void BackgroundLoader::tree_loader()
+{
+    for (;;)
+    {
+        auto lg = m_cache.lock();
+        m_cv.wait(lg, [this]() { return m_tree_invalidated.load(); });
+        lg.unlock();
+
+        if (m_tree_invalidated.load())
+        {
+            m_tree_invalidated = false;
+            populate_tree();
+        }
+    }
 }
 
 //==========================================================================

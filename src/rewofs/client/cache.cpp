@@ -174,7 +174,7 @@ void Content::reset()
 //--------------------------------------------------------------------------
 
 bool Content::read(const Path& path, const uintmax_t start, const size_t size,
-                   const std::function<void(const gsl::span<const uint8_t>)> store_cb)
+                   const std::function<void(const gsl::span<const uint8_t>)>& store_cb)
 {
     const auto it
         = std::find_if(m_blocks.begin(), m_blocks.end(), [&](const auto& block) {
@@ -222,6 +222,88 @@ void Content::delete_file(const Path& path)
         std::remove_if(m_blocks.begin(), m_blocks.end(),
                        [&path](const auto& block) { return block.path == path; }),
         m_blocks.end());
+}
+
+//==========================================================================
+
+std::unique_lock<std::mutex> Cache::lock()
+{
+    return std::unique_lock{m_mutex};
+}
+
+//--------------------------------------------------------------------------
+
+void Cache::reset()
+{
+    m_tree.reset();
+    m_content.reset();
+}
+
+//--------------------------------------------------------------------------
+
+Node& Cache::get_root()
+{
+    return m_tree.get_root();
+}
+
+//--------------------------------------------------------------------------
+
+Node& Cache::make_node(Node& parent, const std::string& name)
+{
+    return m_tree.make_node(parent, name);
+}
+
+//--------------------------------------------------------------------------
+
+Node& Cache::get_node(const Path& name)
+{
+    return m_tree.get_node(name);
+}
+
+//--------------------------------------------------------------------------
+
+void Cache::remove_single(const Path& path)
+{
+    m_tree.remove_single(path);
+    m_content.delete_file(path);
+}
+
+//--------------------------------------------------------------------------
+
+Node& Cache::make_node(const Path& path)
+{
+    return m_tree.make_node(path);
+}
+
+//--------------------------------------------------------------------------
+
+void Cache::rename(const Path& from, const Path& to)
+{
+    m_tree.rename(from, to);
+    // TODO content
+}
+
+//--------------------------------------------------------------------------
+
+void Cache::exchange(const Path& node1, const Path& node2)
+{
+    m_tree.exchange(node1, node2);
+    // TODO content
+}
+
+//--------------------------------------------------------------------------
+
+bool Cache::read(const Path& path, const uintmax_t start, const size_t size,
+                 const std::function<void(const gsl::span<const uint8_t>)>& store_cb)
+{
+    return m_content.read(path, start, size, store_cb);
+}
+
+//--------------------------------------------------------------------------
+
+void Cache::write(const Path& path, const uintmax_t start, std::vector<uint8_t> content)
+{
+    m_content.write(path, start, content);
 }
 
 //==========================================================================

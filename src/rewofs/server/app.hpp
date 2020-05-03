@@ -12,6 +12,7 @@
 #include "rewofs/enablewarnings.hpp"
 
 #include "rewofs/server/transport.hpp"
+#include "rewofs/server/watcher.hpp"
 #include "rewofs/server/worker.hpp"
 
 //==========================================================================
@@ -27,8 +28,11 @@ public:
 
     //--------------------------------
 private:
+    static void signal_handler(int);
+
     const boost::program_options::variables_map& m_options;
     server::Transport m_transport{};
+    Watcher m_watcher{m_transport};
     Worker m_worker{m_transport};
 };
 

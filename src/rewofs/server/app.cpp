@@ -2,17 +2,36 @@
 ///
 /// @file
 
-#include "rewofs/server/app.hpp"
+#include <csignal>
 
-#include <boost/filesystem.hpp>
+#include "rewofs/server/app.hpp"
 
 //==========================================================================
 namespace rewofs::server {
 //==========================================================================
 
+namespace
+{
+App* g_app{};
+}
+
+//==========================================================================
+
+void App::signal_handler(int)
+{
+    log_info("caught SIGINT, quiting");
+    assert(g_app != nullptr);
+    g_app->m_worker.stop();
+    g_app->m_watcher.stop();
+    std::signal(SIGINT, SIG_DFL);
+}
+
+//==========================================================================
+
 App::App(const boost::program_options::variables_map& options)
     : m_options{options}
 {
+    g_app = this;
 }
 
 //--------------------------------------------------------------------------
@@ -27,7 +46,11 @@ void App::run()
     const auto endpoint = m_options["listen"].as<std::string>();
     m_transport.set_endpoint(endpoint);
 
+    std::signal(SIGINT, signal_handler);
+
     m_worker.start();
+    m_watcher.start();
+    m_watcher.wait();
     m_worker.wait();
 }
 

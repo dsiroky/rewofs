@@ -2,16 +2,13 @@
 ///
 /// @file
 
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-
 #include "rewofs/disablewarnings.hpp"
 #include <boost/range/iterator_range.hpp>
 #include "rewofs/enablewarnings.hpp"
 
 #include "rewofs/log.hpp"
-#include "rewofs/server/path.hpp"
+#include "rewofs/messages.hpp"
+#include "rewofs/path.hpp"
 #include "rewofs/server/worker.hpp"
 
 //==========================================================================
@@ -69,24 +66,6 @@ int renameat2(int olddirfd, const char* oldpath, int newdirfd, const char* newpa
     }
 }
 #endif
-
-//--------------------------------------------------------------------------
-
-void copy(const timespec& src, messages::Time& dst)
-{
-    dst.mutate_nsec(src.tv_nsec);
-    dst.mutate_sec(src.tv_sec);
-}
-
-//--------------------------------------------------------------------------
-
-void copy(struct stat& src, messages::Stat& dst)
-{
-    dst.mutate_st_mode(src.st_mode);
-    dst.mutate_st_size(src.st_size);
-    copy(src.st_ctim, dst.mutable_st_ctim());
-    copy(src.st_mtim, dst.mutable_st_mtim());
-}
 
 //--------------------------------------------------------------------------
 
@@ -173,12 +152,15 @@ void Worker::start()
         thr = std::thread{&Worker::run, this};
     }
 
-    for (;;)
-    {
-        m_transport.recv([this](const gsl::span<const uint8_t> buf) {
-            m_requests_queue.push({buf.begin(), buf.end()});
-        });
-    }
+    m_recv_thread = std::thread(&Worker::recv_loop, this);
+}
+
+//--------------------------------------------------------------------------
+
+void Worker::stop()
+{
+    m_quit = true;
+    m_requests_queue.stop();
 }
 
 //--------------------------------------------------------------------------
@@ -192,16 +174,40 @@ void Worker::wait()
             thr.join();
         }
     }
+
+    if (m_recv_thread.joinable())
+    {
+        m_recv_thread.join();
+    }
+}
+
+//--------------------------------------------------------------------------
+
+void Worker::recv_loop()
+{
+    while (not m_quit)
+    {
+        m_transport.recv([this](const gsl::span<const uint8_t> buf) {
+            m_requests_queue.push({buf.begin(), buf.end()});
+        });
+    }
 }
 
 //--------------------------------------------------------------------------
 
 void Worker::run()
 {
-    for (;;)
+    while (not m_quit)
     {
-        const auto buf = m_requests_queue.pop();
-        m_distributor.process_frame(buf);
+        try
+        {
+            const auto buf = m_requests_queue.pop();
+            m_distributor.process_frame(buf);
+        }
+        catch (const QuitSignal&)
+        {
+            break;
+        }
     }
 }
 

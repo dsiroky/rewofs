@@ -8,10 +8,11 @@
 namespace rewofs::client {
 //==========================================================================
 
-Heartbeat::Heartbeat(Serializer& serializer, Deserializer& deserializer, CachedVfs& vfs)
+Heartbeat::Heartbeat(Serializer& serializer, Deserializer& deserializer,
+                     BackgroundLoader& loader)
     : m_serializer{serializer}
     , m_deserializer{deserializer}
-    , m_vfs{vfs}
+    , m_loader{loader}
 {
 }
 
@@ -77,7 +78,7 @@ void Heartbeat::run()
 void Heartbeat::on_connect()
 {
     log_info("connected");
-    m_vfs.populate_tree();
+    m_loader.invalidate_tree();
 }
 
 //--------------------------------------------------------------------------

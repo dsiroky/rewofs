@@ -20,10 +20,15 @@
 namespace rewofs::server {
 //==========================================================================
 
+struct QuitSignal {};
+
+//==========================================================================
+
 template<typename T>
 class BlockingQueue
 {
 public:
+
     void push(T const& value)
     {
         std::unique_lock<std::mutex> lock{m_mutex};
@@ -33,17 +38,32 @@ public:
 
     T pop()
     {
+        if (m_stopped)
+        {
+            throw QuitSignal{};
+        }
         std::unique_lock<std::mutex> lock{m_mutex};
-        m_condition.wait(lock, [this] { return !m_queue.empty(); });
+        m_condition.wait(lock, [this] { return not m_queue.empty() or m_stopped; });
+        if (m_stopped)
+        {
+            throw QuitSignal{};
+        }
         T rc{std::move(m_queue.back())};
         m_queue.pop_back();
         return rc;
+    }
+
+    void stop()
+    {
+        m_stopped = true;
+        m_condition.notify_all();
     }
 
 private:
     std::mutex m_mutex{};
     std::condition_variable m_condition{};
     std::deque<T> m_queue{};
+    std::atomic<bool> m_stopped{false};
 };
 
 //==========================================================================
@@ -54,9 +74,11 @@ public:
     Worker(server::Transport& transport);
 
     void start();
+    void stop();
     void wait();
 
 private:
+    void recv_loop();
     void run();
 
     template<typename _Msg, typename _ProcFunc>
@@ -121,7 +143,9 @@ private:
     };
 
     Transport& m_transport;
+    std::atomic<bool> m_quit{false};
     BlockingQueue<std::vector<uint8_t>> m_requests_queue{};
+    std::thread m_recv_thread{};
     std::array<std::thread, 50> m_threads{};
     Distributor m_distributor{};
     std::mutex m_mutex{};

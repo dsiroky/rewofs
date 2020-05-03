@@ -121,10 +121,7 @@ class CachedVfs:public IVfs
 {
 public:
     CachedVfs(IVfs& subvfs, Serializer& serializer, Deserializer& deserializer,
-              IdDispenser& id_dispenser);
-
-    /// Prefill the tree.
-    void populate_tree();
+              IdDispenser& id_dispenser, cache::Cache& cache);
 
     void getattr(const Path&, struct stat& st) override;
     void readdir(const Path&, const DirFiller& filler) override;
@@ -145,8 +142,6 @@ public:
                  const off_t offset) override;
 
 private:
-    void populate_tree(cache::Node& node, const messages::TreeNode& fbb_node);
-
     struct File
     {
         int open_flags{};
@@ -159,10 +154,37 @@ private:
     Deserializer& m_deserializer;
     IdDispenser& m_id_dispenser;
     SingleComm m_comm{m_serializer, m_deserializer};
-    cache::Tree m_tree{};
-    cache::Content m_content_cache{};
+    cache::Cache& m_cache;
     std::unordered_map<FileHandle, File> m_opened_files{};
-    std::mutex m_mutex{};
+};
+
+//==========================================================================
+
+/// Tree and content (pre)loader.
+class BackgroundLoader
+{
+public:
+    BackgroundLoader(Serializer& serializer, Deserializer& deserializer,
+                     Distributor& distributor, cache::Cache& cache);
+
+    void start();
+    void invalidate_tree();
+
+private:
+    /// Prefill the tree.
+    void populate_tree();
+    void populate_tree(cache::Node& node, const messages::TreeNode& fbb_node);
+    void process_remote_changed(const messages::NotifyChanged&);
+    void tree_loader();
+
+    Serializer& m_serializer;
+    Deserializer& m_deserializer;
+    Distributor& m_distributor;
+    SingleComm m_comm{m_serializer, m_deserializer};
+    cache::Cache& m_cache;
+    std::thread m_tree_loader_thread{};
+    std::condition_variable m_cv{};
+    std::atomic<bool> m_tree_invalidated{false};
 };
 
 //==========================================================================

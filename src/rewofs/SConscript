@@ -25,6 +25,7 @@ rewofs_lib = [
         src_env.WholeArchive(rewofs_env.StaticLibrary(OUT, SRC)),
         "fuse3", "nanomsg", "anl", "fmt", "zstd",
         "boost_program_options", "boost_filesystem", "boost_system",
+        "inotifytools",
     ]
 
 rewofs_env.AppendUnique(LIBS=[rewofs_lib])

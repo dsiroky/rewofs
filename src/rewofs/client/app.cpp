@@ -29,12 +29,13 @@ void App::run()
     m_fuse.set_mountpoint(mountpoint);
 
     m_transport.start();
+    m_background_loader.start();
     m_heartbeat.start();
     m_fuse.start();
     m_fuse.wait();
     m_heartbeat.stop();
-    m_heartbeat.wait();
     m_transport.stop();
+    m_heartbeat.wait();
     m_transport.wait();
 }
 

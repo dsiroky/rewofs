@@ -31,7 +31,9 @@ union Message
     CommandWrite,
     ResultWrite,
 
-    ResultErrno
+    ResultErrno,
+
+    NotifyChanged
 }
 
 // Main transport frame.

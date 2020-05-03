@@ -32,11 +32,16 @@ private:
     const boost::program_options::variables_map& m_options;
     Serializer m_serializer{};
     Deserializer m_deserializer{};
-    client::Transport m_transport{m_serializer, m_deserializer};
+    Distributor m_distributor{};
+    client::Transport m_transport{m_serializer, m_deserializer, m_distributor};
     IdDispenser m_id_dispenser{};
     RemoteVfs m_remote_vfs{m_serializer, m_deserializer, m_id_dispenser};
-    CachedVfs m_cached_vfs{m_remote_vfs, m_serializer, m_deserializer, m_id_dispenser};
-    Heartbeat m_heartbeat{m_serializer, m_deserializer, m_cached_vfs};
+    cache::Cache m_cache{};
+    CachedVfs m_cached_vfs{m_remote_vfs, m_serializer, m_deserializer, m_id_dispenser,
+                           m_cache};
+    BackgroundLoader m_background_loader{m_serializer, m_deserializer, m_distributor,
+                                         m_cache};
+    Heartbeat m_heartbeat{m_serializer, m_deserializer, m_background_loader};
     Fuse m_fuse{m_cached_vfs};
 };
 
