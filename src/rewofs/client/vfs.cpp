@@ -398,7 +398,6 @@ void CachedVfs::getattr(const Path& path, struct stat& st)
 {
     auto lg = m_cache.lock();
     st = m_cache.get_node(path).st;
-    log_info("{} {} {}", path.native(), st.st_mtim.tv_sec, st.st_mtim.tv_nsec);
 }
 
 //--------------------------------------------------------------------------
