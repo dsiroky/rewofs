@@ -7,6 +7,7 @@
 #define WATCHER_HPP__DNJ8BT5L
 
 #include <chrono>
+#include <mutex>
 #include <thread>
 
 #include "rewofs/disablewarnings.hpp"
