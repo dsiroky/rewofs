@@ -36,9 +36,8 @@ void TemporalIgnores::add(const std::chrono::steady_clock::time_point now, Path 
     std::lock_guard lg{m_mutex};
     m_items.push_back({now, std::move(path)});
 
-    /// Items should be sorted by a timestamp.
-    assert(std::is_sorted(m_items.begin(), m_items.end(),
-                          [](const auto& i1, const auto& i2) { return i1.tp < i2.tp; }));
+    /// Items must be sorted by a timestamp.
+    assert(std::is_sorted(m_items.begin(), m_items.end(), ItemsOrder{}));
 }
 
 //--------------------------------------------------------------------------
@@ -49,10 +48,11 @@ bool TemporalIgnores::check(const std::chrono::steady_clock::time_point now, con
 
     // delete obsolete items
     const auto old_time = now - m_ignore_duration;
-    m_items.erase(
-        std::remove_if(m_items.begin(), m_items.end(),
-                       [old_time](const auto& item) { return item.tp < old_time; }),
-        m_items.end());
+    m_items.erase(m_items.begin(), std::lower_bound(m_items.begin(), m_items.end(),
+                                                    Item{old_time, {}}, ItemsOrder{}));
+
+    /// Items must be sorted by a timestamp.
+    assert(std::is_sorted(m_items.begin(), m_items.end(), ItemsOrder{}));
 
     return std::find_if(m_items.begin(), m_items.end(),
                         [&path](const auto& item) { return path == item.path; })

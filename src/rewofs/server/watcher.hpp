@@ -42,6 +42,14 @@ private:
         Path path{};
     };
 
+    struct ItemsOrder
+    {
+        constexpr bool operator()(const Item& i1, const Item& i2) const
+        {
+            return i1.tp < i2.tp;
+        }
+    };
+
     const std::chrono::milliseconds m_ignore_duration{};
     std::deque<Item> m_items{};
     std::mutex m_mutex{};
