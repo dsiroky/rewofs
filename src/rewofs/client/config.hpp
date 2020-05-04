@@ -12,7 +12,7 @@
 namespace rewofs::client {
 //==========================================================================
 
-inline static constexpr std::chrono::seconds TIMEOUT{5};
+inline static constexpr std::chrono::seconds TIMEOUT{15};
 
 //==========================================================================
 } // namespace rewofs::client
