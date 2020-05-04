@@ -34,10 +34,10 @@ TemporalIgnores::TemporalIgnores(const std::chrono::milliseconds ignore_duration
 void TemporalIgnores::add(const std::chrono::steady_clock::time_point now, Path path)
 {
     std::lock_guard lg{m_mutex};
+    /// Assuming steady_clock is monotonic then m_items will be almost always
+    /// sorted by time. There may be some edge cases that break the consistency
+    /// due to multithread access (time is provided by callers). It is OK.
     m_items.push_back({now, std::move(path)});
-
-    /// Items must be sorted by a timestamp.
-    assert(std::is_sorted(m_items.begin(), m_items.end(), ItemsOrder{}));
 }
 
 //--------------------------------------------------------------------------
@@ -50,9 +50,6 @@ bool TemporalIgnores::check(const std::chrono::steady_clock::time_point now, con
     const auto old_time = now - m_ignore_duration;
     m_items.erase(m_items.begin(), std::lower_bound(m_items.begin(), m_items.end(),
                                                     Item{old_time, {}}, ItemsOrder{}));
-
-    /// Items must be sorted by a timestamp.
-    assert(std::is_sorted(m_items.begin(), m_items.end(), ItemsOrder{}));
 
     return std::find_if(m_items.begin(), m_items.end(),
                         [&path](const auto& item) { return path == item.path; })
