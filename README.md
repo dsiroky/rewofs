@@ -7,5 +7,11 @@
 - Slow network with high latencies?
 - sshfs/nfs/samba too slow?
 
-Assumptions:
-- single user access
+## Features:
+- Heavy client-side caching.
+    - The whole served tree is preloaded - fast browsing.
+    - Read files are kept in the memory.
+- Remote invalidations.
+    - Files/directories can be modified on the server side. Changes are
+      propagated to the client.
+- Auto reconnect.
