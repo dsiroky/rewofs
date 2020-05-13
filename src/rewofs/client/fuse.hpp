@@ -10,6 +10,8 @@
 
 #include "rewofs/disablewarnings.hpp"
 #include <boost/noncopyable.hpp>
+#define FUSE_USE_VERSION 32
+#include <fuse3/fuse.h>
 #include "rewofs/enablewarnings.hpp"
 
 #include "rewofs/client/vfs.hpp"
@@ -23,8 +25,12 @@ class Fuse : private boost::noncopyable
 public:
     Fuse(IVfs& vfs);
 
+    Fuse(const Fuse& vfs) = delete;
+    Fuse& operator=(const Fuse& vfs) = delete;
+
     void set_mountpoint(const std::string& path);
     void start();
+    void stop();
     void wait();
 
 private:
@@ -34,6 +40,7 @@ private:
 
     std::string m_mountpoint{};
     std::thread m_thread{};
+    fuse* m_fuse{};
 };
 
 //==========================================================================

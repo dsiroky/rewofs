@@ -157,6 +157,21 @@ table ResultWrite
     res_errno:int32;
 }
 
+table CommandPreread
+{
+    path:string;
+    offset:uint64;
+    size:uint64;
+}
+table ResultPreread
+{
+    res:int64;
+    res_errno:int32;
+    path:string;
+    offset:uint64;
+    data:[ubyte];
+}
+
 table ResultErrno
 {
     res_errno:int32;

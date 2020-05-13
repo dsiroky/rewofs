@@ -4,6 +4,7 @@
 
 #include "rewofs/disablewarnings.hpp"
 #include <boost/range/iterator_range.hpp>
+#include <boost/scope_exit.hpp>
 #include "rewofs/enablewarnings.hpp"
 
 #include "rewofs/log.hpp"
@@ -142,6 +143,7 @@ Worker::Worker(server::Transport& transport, TemporalIgnores& temporal_ignores)
     SUB(CommandClose, process_close);
     SUB(CommandRead, process_read);
     SUB(CommandWrite, process_write);
+    SUB(CommandPreread, process_preread);
 }
 
 //--------------------------------------------------------------------------
@@ -660,6 +662,42 @@ flatbuffers::Offset<messages::ResultWrite>
     }
 
     return messages::CreateResultWrite(fbb, res, 0);
+}
+
+//--------------------------------------------------------------------------
+
+flatbuffers::Offset<messages::ResultPreread>
+    Worker::process_preread(flatbuffers::FlatBufferBuilder& fbb,
+                         const messages::CommandPreread& msg)
+{
+    const auto path = map_path(msg.path()->c_str());
+    log_trace("{}", path.native());
+
+    const auto fbb_path = fbb.CreateString(msg.path());
+
+    int fd{-1};
+    fd = open(path.c_str(), O_RDONLY);
+    if (fd < 0)
+    {
+        return messages::CreateResultPreread(fbb, fd, errno, fbb_path);
+    }
+    BOOST_SCOPE_EXIT_ALL(&fd) { close(fd); };
+
+    const auto new_ofs = lseek(fd, static_cast<off_t>(msg.offset()), SEEK_SET);
+    if (new_ofs != static_cast<off_t>(msg.offset()))
+    {
+        return messages::CreateResultPreread(fbb, -1, errno, fbb_path);
+    }
+
+    std::vector<uint8_t> buffer(msg.size());
+    const auto res = read(fd, buffer.data(), msg.size());
+    if (res < 0)
+    {
+        return messages::CreateResultPreread(fbb, res, errno, fbb_path);
+    }
+
+    const auto data = fbb.CreateVector(buffer.data(), static_cast<size_t>(res));
+    return messages::CreateResultPreread(fbb, res, 0, fbb_path, msg.offset(), data);
 }
 
 //==========================================================================

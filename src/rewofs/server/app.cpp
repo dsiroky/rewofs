@@ -46,10 +46,11 @@ void App::run()
     const auto endpoint = m_options["listen"].as<std::string>();
     m_transport.set_endpoint(endpoint);
 
-    std::signal(SIGINT, signal_handler);
-
     m_worker.start();
     m_watcher.start();
+
+    std::signal(SIGINT, signal_handler);
+
     m_watcher.wait();
     m_worker.wait();
 }

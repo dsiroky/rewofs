@@ -4,9 +4,6 @@
 
 #include <stdexcept>
 
-#define FUSE_USE_VERSION 32
-#include <fuse3/fuse.h>
-
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
@@ -339,6 +336,17 @@ void Fuse::start()
 
 //--------------------------------------------------------------------------
 
+void Fuse::stop()
+{
+    if (m_fuse != nullptr)
+    {
+        fuse_unmount(m_fuse);
+        m_fuse = nullptr;
+    }
+}
+
+//--------------------------------------------------------------------------
+
 void Fuse::wait()
 {
     if (m_thread.joinable())
@@ -360,21 +368,21 @@ void Fuse::run()
     args.argc = 1;
     args.argv = argv;
     args.allocated = 0;
-    auto fuse = fuse_new(&args, &g_oper, sizeof(g_oper), nullptr);
-    if (fuse == nullptr)
+    m_fuse = fuse_new(&args, &g_oper, sizeof(g_oper), nullptr);
+    if (m_fuse == nullptr)
     {
         throw std::runtime_error{"can't init"};
     }
 
     log_info("mountpoint: '{}'", m_mountpoint);
-    const auto mount_res = fuse_mount(fuse, m_mountpoint.c_str());
+    const auto mount_res = fuse_mount(m_fuse, m_mountpoint.c_str());
     if (mount_res == -1)
     {
         log_error("errno: {}", errno);
         throw std::runtime_error{"can't mount"};
     }
 
-    const auto signal_res = fuse_set_signal_handlers(fuse_get_session(fuse));
+    const auto signal_res = fuse_set_signal_handlers(fuse_get_session(m_fuse));
     if (signal_res == -1)
     {
         throw std::runtime_error{"can't set signal handlers"};
@@ -383,10 +391,13 @@ void Fuse::run()
     log_info("looping");
     fuse_loop_config loop_config{};
     loop_config.clone_fd = 0;
-    loop_config.max_idle_threads = 10;
-    fuse_loop_mt(fuse, &loop_config);
+    loop_config.max_idle_threads = 50;
+    fuse_loop_mt(m_fuse, &loop_config);
     log_info("quitting");
-    fuse_unmount(fuse);
+    if (m_fuse != nullptr)
+    {
+        fuse_unmount(m_fuse);
+    }
 }
 
 //==========================================================================

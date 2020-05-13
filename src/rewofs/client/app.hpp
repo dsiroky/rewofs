@@ -29,6 +29,8 @@ public:
 
     //--------------------------------
 private:
+    static void signal_handler(int);
+
     const boost::program_options::variables_map& m_options;
     Serializer m_serializer{};
     Deserializer m_deserializer{};

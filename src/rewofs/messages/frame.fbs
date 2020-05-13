@@ -32,6 +32,9 @@ union Message
     CommandWrite,
     ResultWrite,
 
+    CommandPreread,
+    ResultPreread,
+
     ResultErrno,
 
     NotifyChanged

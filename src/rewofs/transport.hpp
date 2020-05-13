@@ -55,6 +55,7 @@ public:
                                   strong::default_constructible, strong::ordered>;
     class QueueRef;
 
+    static constexpr Priority PRIORITY_BACKGROUND{0};
     static constexpr Priority PRIORITY_DEFAULT{10};
     static constexpr Priority PRIORITY_HIGH{100};
 

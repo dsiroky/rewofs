@@ -1,4 +1,3 @@
-#include <iostream>
 /// @copydoc cache.hpp
 ///
 /// @file
@@ -27,6 +26,13 @@ Tree::Tree()
 //--------------------------------------------------------------------------
 
 Node& Tree::get_root()
+{
+    return m_root;
+}
+
+//--------------------------------------------------------------------------
+
+const Node& Tree::get_root() const
 {
     return m_root;
 }
@@ -176,16 +182,25 @@ void Content::reset()
 bool Content::read(const Path& path, const uintmax_t start, const size_t size,
                    const std::function<void(const gsl::span<const uint8_t>)>& store_cb)
 {
-    const auto it
-        = std::find_if(m_blocks.begin(), m_blocks.end(), [&](const auto& block) {
-              return (block.path == path) and (block.start == start)
-                     and (block.content.size() == size);
-          });
-    if (it == m_blocks.end())
+    const auto file_it = m_blocks.find(path);
+    if (file_it == m_blocks.end())
     {
         return false;
     }
-    store_cb(it->content);
+
+    const auto it = std::find_if(
+        file_it->second.begin(), file_it->second.end(), [&](const auto& block) {
+            return (block.start <= start)
+                   and (block.content.size() >= (start - block.start + size));
+        });
+    if (it == file_it->second.end())
+    {
+        return false;
+    }
+
+    const auto begin = it->content.data() + static_cast<ssize_t>(start - it->start);
+    assert(!!store_cb);
+    store_cb(gsl::span<const uint8_t>{begin, begin + size});
     return true;
 }
 
@@ -193,35 +208,75 @@ bool Content::read(const Path& path, const uintmax_t start, const size_t size,
 
 void Content::write(const Path& path, const uintmax_t start, std::vector<uint8_t> content)
 {
-    const auto it
-        = std::find_if(m_blocks.begin(), m_blocks.end(), [&](const auto& block) {
-              return (block.path == path) and (block.start <= start)
-                     and (block.content.size() >= (start - block.start + content.size()));
-          });
-    if (it == m_blocks.end())
+    const auto file_it = m_blocks.find(path);
+    if (file_it != m_blocks.end())
     {
-        Block b{};
-        b.path = path;
-        b.start = start;
-        b.content = content;
-        m_blocks.emplace_back(std::move(b));
+        const auto it = std::find_if(
+            file_it->second.begin(), file_it->second.end(), [&](const auto& block) {
+                return (block.start <= start)
+                       and (block.content.size()
+                            >= (start - block.start + content.size()));
+            });
+        if (it != file_it->second.end())
+        {
+            std::copy(
+                content.begin(), content.end(),
+                std::next(it->content.begin(), static_cast<ssize_t>(start - it->start)));
+            return;
+        }
     }
-    else
-    {
-        std::copy(
-            content.begin(), content.end(),
-            std::next(it->content.begin(), static_cast<ssize_t>(start - it->start)));
-    }
+
+    Block b{};
+    b.start = start;
+    b.content = std::move(content);
+    m_blocks[path].emplace_back(std::move(b));
+    flatten(path);
 }
 
 //--------------------------------------------------------------------------
 
 void Content::delete_file(const Path& path)
 {
-    m_blocks.erase(
-        std::remove_if(m_blocks.begin(), m_blocks.end(),
-                       [&path](const auto& block) { return block.path == path; }),
-        m_blocks.end());
+    m_blocks.erase(path);
+}
+
+//--------------------------------------------------------------------------
+
+void Content::flatten(const Path& path)
+{
+    auto& blocks = m_blocks.at(path);
+
+    if (blocks.size() <= 1)
+    {
+        return;
+    }
+
+    blocks.sort([](const Block& b1, const Block& b2) { return b1.start < b2.start; });
+
+    auto it = blocks.begin();
+    while (it != std::prev(blocks.end()))
+    {
+        const auto next_it = std::next(it);
+
+        if ((it->start + it->content.size()) >= next_it->start)
+        {
+            const size_t offset = next_it->start - it->start;
+            assert(offset <= it->content.size());
+            const size_t new_size
+                = std::max(it->content.size(), offset + next_it->content.size());
+            assert(new_size <= (it->content.size() + next_it->content.size()));
+            std::vector<uint8_t> new_content(new_size);
+            std::copy(it->content.begin(), it->content.end(), new_content.begin());
+            std::copy(next_it->content.begin(), next_it->content.end(),
+                      new_content.begin() + static_cast<ssize_t>(offset));
+            it->content = std::move(new_content);
+            blocks.erase(next_it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
 }
 
 //==========================================================================
@@ -242,6 +297,13 @@ void Cache::reset()
 //--------------------------------------------------------------------------
 
 Node& Cache::get_root()
+{
+    return m_tree.get_root();
+}
+
+//--------------------------------------------------------------------------
+
+const Node& Cache::get_root() const
 {
     return m_tree.get_root();
 }

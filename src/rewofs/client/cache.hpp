@@ -18,6 +18,17 @@
 #include <gsl/span>
 #include "rewofs/enablewarnings.hpp"
 
+namespace std {
+    template<>
+    struct hash<boost::filesystem::path>
+    {
+        std::size_t operator()(const boost::filesystem::path& path) const
+        {
+            return std::hash<std::string>{}(path.native());
+        }
+    };
+} // namespace std
+
 //==========================================================================
 namespace rewofs::client::cache {
 //==========================================================================
@@ -48,6 +59,7 @@ public:
     void reset();
 
     Node& get_root();
+    const Node& get_root() const;
     Node& make_node(Node& parent, const std::string& name);
     Node& get_node(const Path& name);
     /// Remove a node only if it has no children.
@@ -81,12 +93,14 @@ public:
 private:
     struct Block
     {
-        Path path{};
         uintmax_t start{};
         std::vector<uint8_t> content{};
     };
 
-    std::deque<Block> m_blocks{};
+    /// Flatten/unify adjacent and overlapping blocks.
+    void flatten(const Path& path);
+
+    std::unordered_map<Path, std::list<Block>> m_blocks{};
 };
 
 //==========================================================================
@@ -99,6 +113,7 @@ public:
     void reset();
 
     Node& get_root();
+    const Node& get_root() const;
     Node& make_node(Node& parent, const std::string& name);
     Node& get_node(const Path& name);
     void remove_single(const Path& path);

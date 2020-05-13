@@ -42,6 +42,9 @@ private:
 class IVfs
 {
 public:
+    // fragment reads/writes to improve remote response
+    static constexpr size_t IO_FRAGMENT_SIZE{32 * 1024};
+
     using FileHandle
         = strong::type<uint64_t, struct FileHandle_, strong::equality, strong::hashable>;
 
@@ -105,9 +108,6 @@ public:
 
     //--------------------------------
 private:
-    // fragment reads/writes to improve remote response
-    static constexpr size_t IO_FRAGMENT_SIZE{32 * 1024};
-
     FileHandle open_common(const Path& path, const int flags,
                            const std::optional<mode_t> mode);
 
@@ -171,14 +171,26 @@ public:
                      Distributor& distributor, cache::Cache& cache);
 
     void start();
+    void stop();
+    void wait();
+
     void invalidate_tree();
 
 private:
+    struct FileInfo
+    {
+        IVfs::Path path{};
+        uint64_t size{};
+    };
+
     /// Prefill the tree.
     void populate_tree();
     void populate_tree(cache::Node& node, const messages::TreeNode& fbb_node);
-    void process_remote_changed(const messages::NotifyChanged&);
+    template<typename _It>
+    void preload_files_bulks(const _It begin, const _It end);
+    void preload_files();
     void tree_loader();
+    void process_remote_changed(const messages::NotifyChanged&);
 
     Serializer& m_serializer;
     Deserializer& m_deserializer;
@@ -188,6 +200,7 @@ private:
     std::thread m_tree_loader_thread{};
     std::condition_variable m_cv{};
     std::atomic<bool> m_tree_invalidated{false};
+    std::atomic<bool> m_quit{false};
 };
 
 //==========================================================================

@@ -2,6 +2,8 @@
 ///
 /// @file
 
+#include <regex>
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -703,6 +705,23 @@ void BackgroundLoader::start()
 
 //--------------------------------------------------------------------------
 
+void BackgroundLoader::stop()
+{
+    m_quit = true;
+}
+
+//--------------------------------------------------------------------------
+
+void BackgroundLoader::wait()
+{
+    if (m_tree_loader_thread.joinable())
+    {
+        m_tree_loader_thread.join();
+    }
+}
+
+//--------------------------------------------------------------------------
+
 void BackgroundLoader::invalidate_tree()
 {
     m_tree_invalidated = true;
@@ -748,16 +767,141 @@ void BackgroundLoader::populate_tree(cache::Node& node, const messages::TreeNode
 
 //--------------------------------------------------------------------------
 
-void BackgroundLoader::process_remote_changed(const messages::NotifyChanged&)
+static size_t block_aligned_size(const size_t sz)
 {
-    invalidate_tree();
+    static constexpr size_t BLKSIZE{4096};
+    return ((sz + BLKSIZE - 1) / BLKSIZE) * BLKSIZE;
+}
+
+//--------------------------------------------------------------------------
+
+template<typename _It>
+void BackgroundLoader::preload_files_bulks(const _It begin, const _It end)
+{
+    try
+    {
+        auto queue = m_serializer.new_queue(Serializer::PRIORITY_BACKGROUND);
+        std::vector<MessageId> mids{};
+
+        const auto wait_for_mids = [this, &mids]()
+        {
+            log_trace("waiting for a batch");
+            for (const auto mid: mids)
+            {
+                const auto res
+                    = m_deserializer.wait_for_result<messages::ResultPreread>(mid, TIMEOUT);
+                if (not res.is_valid())
+                {
+                    throw std::system_error{EHOSTUNREACH, std::generic_category()};
+                }
+                const auto& message = res.message();
+                if (message.res() < 0)
+                {
+                    // silentely ignore the read error
+                    log_trace("preloading failed {} errno:{}",
+                              message.path()->c_str(), message.res_errno());
+                    continue;
+                }
+
+                // FUSE reads are 4k block aligned
+                std::vector<uint8_t> buf(block_aligned_size(message.data()->size()));
+                assert(buf.size() >= message.data()->size());
+                std::copy(message.data()->begin(), message.data()->end(), buf.begin());
+                m_cache.write(message.path()->str(), message.offset(), std::move(buf));
+            }
+        };
+
+        // a size limit for a send buffer on the server side
+        static constexpr uint64_t BULK_SIZE{1024 * 1024};
+        uint64_t size_counter{0};
+        for (auto files_it = begin; files_it != end; ++files_it)
+        {
+            log_trace("preloading {}", files_it->path.native());
+            uint64_t offset{0};
+            while (offset < files_it->size)
+            {
+                flatbuffers::FlatBufferBuilder fbb{};
+                const auto blk_size
+                    = std::min(IVfs::IO_FRAGMENT_SIZE, files_it->size - offset);
+                const auto command = messages::CreateCommandPrereadDirect(
+                    fbb, files_it->path.c_str(), static_cast<size_t>(offset),
+                    blk_size);
+                mids.emplace_back(m_serializer.add_command(queue, fbb, command));
+                offset += IVfs::IO_FRAGMENT_SIZE;
+
+                size_counter += blk_size;
+                if (size_counter >= BULK_SIZE)
+                {
+                    wait_for_mids();
+                    mids.clear();
+                    size_counter = 0;
+                }
+            }
+        }
+        wait_for_mids();
+    }
+    catch (const std::exception& exc)
+    {
+        log_error("preload failed: {}", exc.what());
+    }
+}
+
+//--------------------------------------------------------------------------
+
+void BackgroundLoader::preload_files()
+{
+    static const std::array<std::regex, 1> patterns{{
+        //std::regex{".*"}
+        std::regex{".*/.gitignore"}
+    }};
+
+    log_info("preloading content");
+
+    auto lg = m_cache.lock();
+    std::vector<FileInfo> files_list{};
+    const auto browser
+        = [&files_list](const IVfs::Path& parent_, const cache::Node& node_) -> void
+    {
+        const auto browser_impl
+            = [&files_list](const IVfs::Path& parent, const cache::Node& node,
+                            auto& browser_ref) -> void
+        {
+            const IVfs::Path node_path{(parent == "") ? "/" : parent / node.name};
+            const auto is_directory
+                = static_cast<bool>((node.st.st_mode & S_IFDIR) == S_IFDIR);
+            const auto is_symlink
+                = static_cast<bool>((node.st.st_mode & S_IFLNK) == S_IFLNK);
+            if (not is_directory and not is_symlink)
+            {
+                for (const auto& pat: patterns)
+                {
+                    if (std::regex_match(node_path.native(), pat))
+                    {
+                        files_list.push_back(
+                            {node_path, static_cast<uint64_t>(node.st.st_size)});
+                        break;
+                    }
+                }
+            }
+            for (const auto& child : node.children)
+            {
+                browser_ref(node_path, child.second, browser_ref);
+            }
+        };
+        browser_impl(parent_, node_, browser_impl);
+    };
+    browser("", m_cache.get_root());
+
+    preload_files_bulks(files_list.begin(), files_list.end());
+
+    log_info("preloading content done");
 }
 
 //--------------------------------------------------------------------------
 
 void BackgroundLoader::tree_loader()
 {
-    for (;;)
+    while (not m_quit)
     {
         auto lg = m_cache.lock();
         m_cv.wait(lg, [this]() { return m_tree_invalidated.load(); });
@@ -766,9 +910,24 @@ void BackgroundLoader::tree_loader()
         if (m_tree_invalidated.load())
         {
             m_tree_invalidated = false;
-            populate_tree();
+            try
+            {
+                populate_tree();
+                preload_files();
+            }
+            catch (const std::exception& err)
+            {
+                log_error("{}", err.what());
+            }
         }
     }
+}
+
+//--------------------------------------------------------------------------
+
+void BackgroundLoader::process_remote_changed(const messages::NotifyChanged&)
+{
+    invalidate_tree();
 }
 
 //==========================================================================

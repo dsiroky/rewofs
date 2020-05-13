@@ -164,7 +164,6 @@ TEST(Content, RW)
     content.write("/d", 10, {1, 2, 3});
 
     EXPECT_FALSE(content.read("/d", 0, 2, {}));
-    EXPECT_FALSE(content.read("/d", 10, 2, {}));
     EXPECT_FALSE(content.read("/d", 10, 50, {}));
 
     {
@@ -202,6 +201,111 @@ TEST(Content, RW)
             std::copy(buf.begin(), buf.end(), std::back_inserter(out));
         }));
         EXPECT_THAT(out, t::ElementsAre(1, 40, 41));
+    }
+}
+
+//--------------------------------------------------------------------------
+
+TEST(Content, RW_AdjacentWrites)
+{
+    client::cache::Content content{};
+
+    content.write("/a", 10, {1, 2, 3, 4});
+    content.write("/a", 14, {5, 6, 7, 8});
+    content.write("/a", 18, {9, 10, 11, 12});
+
+    EXPECT_FALSE(content.read("/a", 8, 4, {}));
+    EXPECT_FALSE(content.read("/a", 20, 4, {}));
+
+    {
+        std::vector<uint8_t> out{};
+        EXPECT_TRUE(content.read("/a", 10, 6, [&out](const auto& buf) {
+            std::copy(buf.begin(), buf.end(), std::back_inserter(out));
+        }));
+        EXPECT_THAT(out, t::ElementsAre(1, 2, 3, 4, 5, 6));
+    }
+
+    {
+        std::vector<uint8_t> out{};
+        EXPECT_TRUE(content.read("/a", 13, 7, [&out](const auto& buf) {
+            std::copy(buf.begin(), buf.end(), std::back_inserter(out));
+        }));
+        EXPECT_THAT(out, t::ElementsAre(4, 5, 6, 7, 8, 9, 10));
+    }
+}
+
+//--------------------------------------------------------------------------
+
+TEST(Content, RW_OverlappingWrites)
+{
+    client::cache::Content content{};
+
+    content.write("/a", 10, {1, 2, 3, 4});
+    content.write("/a", 12, {5, 6, 7, 8});
+    content.write("/a", 14, {9, 10, 11, 12});
+
+    EXPECT_FALSE(content.read("/a", 8, 4, {}));
+    EXPECT_FALSE(content.read("/a", 16, 4, {}));
+
+    {
+        std::vector<uint8_t> out{};
+        EXPECT_TRUE(content.read("/a", 10, 7, [&out](const auto& buf) {
+            std::copy(buf.begin(), buf.end(), std::back_inserter(out));
+        }));
+        EXPECT_THAT(out, t::ElementsAre(1, 2, 5, 6, 9, 10, 11));
+    }
+
+    {
+        std::vector<uint8_t> out{};
+        EXPECT_TRUE(content.read("/a", 10, 3, [&out](const auto& buf) {
+            std::copy(buf.begin(), buf.end(), std::back_inserter(out));
+        }));
+        EXPECT_THAT(out, t::ElementsAre(1, 2, 5));
+    }
+
+    {
+        std::vector<uint8_t> out{};
+        EXPECT_TRUE(content.read("/a", 13, 2, [&out](const auto& buf) {
+            std::copy(buf.begin(), buf.end(), std::back_inserter(out));
+        }));
+        EXPECT_THAT(out, t::ElementsAre(6, 9));
+    }
+}
+
+//--------------------------------------------------------------------------
+
+TEST(Content, RW_NestedWrites)
+{
+    client::cache::Content content{};
+
+    content.write("/a", 10, {1, 2, 3, 4, 5, 6});
+    content.write("/a", 12, {7, 8});
+
+    EXPECT_FALSE(content.read("/a", 8, 4, {}));
+    EXPECT_FALSE(content.read("/a", 14, 4, {}));
+
+    {
+        std::vector<uint8_t> out{};
+        EXPECT_TRUE(content.read("/a", 10, 6, [&out](const auto& buf) {
+            std::copy(buf.begin(), buf.end(), std::back_inserter(out));
+        }));
+        EXPECT_THAT(out, t::ElementsAre(1, 2, 7, 8, 5, 6));
+    }
+
+    {
+        std::vector<uint8_t> out{};
+        EXPECT_TRUE(content.read("/a", 10, 3, [&out](const auto& buf) {
+            std::copy(buf.begin(), buf.end(), std::back_inserter(out));
+        }));
+        EXPECT_THAT(out, t::ElementsAre(1, 2, 7));
+    }
+
+    {
+        std::vector<uint8_t> out{};
+        EXPECT_TRUE(content.read("/a", 13, 2, [&out](const auto& buf) {
+            std::copy(buf.begin(), buf.end(), std::back_inserter(out));
+        }));
+        EXPECT_THAT(out, t::ElementsAre(8, 5));
     }
 }
 

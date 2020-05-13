@@ -152,6 +152,9 @@ private:
     flatbuffers::Offset<messages::ResultWrite>
         process_write(flatbuffers::FlatBufferBuilder& fbb,
                         const messages::CommandWrite& msg);
+    flatbuffers::Offset<messages::ResultPreread>
+        process_preread(flatbuffers::FlatBufferBuilder& fbb,
+                        const messages::CommandPreread& msg);
 
     std::pair<FileRef, std::unique_lock<std::mutex>> get_file_descriptor(const uint64_t fh);
 
