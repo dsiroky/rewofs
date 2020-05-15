@@ -909,7 +909,6 @@ void BackgroundLoader::tree_loader()
 
         if (m_tree_invalidated.load())
         {
-            m_tree_invalidated = false;
             try
             {
                 populate_tree();
@@ -919,6 +918,7 @@ void BackgroundLoader::tree_loader()
             {
                 log_error("{}", err.what());
             }
+            m_tree_invalidated = false;
         }
     }
 }
