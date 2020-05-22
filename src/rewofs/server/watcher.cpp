@@ -106,24 +106,28 @@ void Watcher::run()
         if (not inotifytools_initialize())
         {
             log_critical("{}", strerror(inotifytools_error()));
-            return;
+            break;
         }
         BOOST_SCOPE_EXIT_ALL()
         {
             inotifytools_cleanup();
         };
+
         if (not inotifytools_watch_recursively(WATCH_PATH.c_str(), EVENTS))
         {
             if (inotifytools_error() == ENOSPC)
             {
                 log_critical("increase fs.inotify.max_user_watches");
+                break;
             }
             else
             {
-                log_critical("{}", strerror(inotifytools_error()));
+                log_error("{}", strerror(inotifytools_error()));
             }
-            break;
+            std::this_thread::sleep_for(std::chrono::seconds{1});
+            continue;
         }
+
         inotify_event* event{nullptr};
         do
         {
