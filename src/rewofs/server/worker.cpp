@@ -216,7 +216,7 @@ void Worker::run()
 
 //--------------------------------------------------------------------------
 
-void Worker::temporal_ignore(const std::string& path)
+void Worker::temporal_ignore(const boost::filesystem::path& path)
 {
     m_temporal_ignores.add(std::chrono::steady_clock::now(), path);
 }
@@ -554,7 +554,9 @@ flatbuffers::Offset<messages::ResultErrno>
     {
         std::lock_guard lg{m_mutex};
         assert(m_opened_files.find(msg.file_handle()) == m_opened_files.end());
-        m_opened_files[msg.file_handle()].fd = res;
+        auto& file_ref = m_opened_files[msg.file_handle()];
+        file_ref.fd = res;
+        file_ref.path = msg.path()->str();
     }
     assert(get_file_descriptor(msg.file_handle()).first.fd == res);
     return messages::CreateResultErrno(fbb, 0);

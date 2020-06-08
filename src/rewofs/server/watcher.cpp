@@ -34,6 +34,7 @@ TemporalIgnores::TemporalIgnores(const std::chrono::milliseconds ignore_duration
 void TemporalIgnores::add(const std::chrono::steady_clock::time_point now, Path path)
 {
     std::lock_guard lg{m_mutex};
+    log_trace("temporal ignore '{}'", path.native());
     /// Assuming steady_clock is monotonic then m_items will be almost always
     /// sorted by time. There may be some edge cases that break the consistency
     /// due to multithread access (time is provided by callers). It is OK.

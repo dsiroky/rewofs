@@ -82,7 +82,7 @@ private:
     struct File
     {
         int fd{};
-        std::string path{};
+        boost::filesystem::path path{};
         /// serialize file IO
         std::mutex mutex{};
     };
@@ -90,14 +90,14 @@ private:
     struct FileRef
     {
         int fd{};
-        std::optional<std::reference_wrapper<std::string>> path{};
+        std::optional<std::reference_wrapper<boost::filesystem::path>> path{};
 
         bool is_valid() const { return fd >= 0; }
     };
 
     void recv_loop();
     void run();
-    void temporal_ignore(const std::string& path);
+    void temporal_ignore(const boost::filesystem::path& path);
 
     template<typename _Msg, typename _ProcFunc>
     void process_message(const MessageId mid, const _Msg& msg, _ProcFunc proc);
