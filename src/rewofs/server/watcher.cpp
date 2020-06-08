@@ -111,6 +111,8 @@ void Watcher::run()
         }
         BOOST_SCOPE_EXIT_ALL()
         {
+            // flush the inotify buffer
+            while (inotifytools_next_event(0) != nullptr) {}
             inotifytools_cleanup();
         };
 
